@@ -1,258 +1,578 @@
 # Science Discovery Framework
 
-A science discovery workflow framework powered by Large Language Models, supporting iterative generate-evaluate-feedback loops designed specifically for scientific research and discovery tasks.
+A comprehensive framework for AI-powered scientific discovery with multi-provider LLM support, iterative workflows, and advanced evaluation capabilities.
 
-## 🎯 Project Overview
+## 🚀 Features
 
-Science_Demo is a modular framework designed to build intelligent science discovery pipelines by combining multiple components:
-
-- **Generation Module**: Unified text generation interface supporting both OpenAI API and Hugging Face models
-- **Prompt Management**: Flexible prompt template system with dynamic variables and few-shot learning
-- **Oracle Module**: Extensible evaluation system with custom metrics support
-- **Workflow**: Core orchestrator supporting iterative optimization and dynamic feedback
-
-## 🏗️ Project Architecture
-
-```
-sci_demo/
-├── generation.py    # Text generation module (OpenAI + HuggingFace)
-├── prompt.py        # Prompt template management system
-├── oracle.py        # Evaluation metrics computation module
-└── workflow.py      # Main workflow orchestrator
-```
-
-## 🚀 Core Features
-
-### 1. Unified Generation Interface
-- Supports OpenAI GPT series models
-- Supports Hugging Face open-source models (e.g., Llama, Qwen, etc.)
-- Asynchronous batch generation
-- Automatic device management (CPU/GPU)
-
-### 2. Flexible Prompt Management
-- Built-in template system (summarization, Q&A, translation, few-shot learning)
-- Dynamic variable substitution
-- Template saving and loading
-- Few-shot example management
-
-### 3. Extensible Evaluation System
-- Custom evaluation metrics
-- Batch evaluation support
-- Flexible parameter passing
-
-### 4. Intelligent Workflow Orchestration
-- Iterative optimization loops
-- Dynamic prompt and metric selection
-- Custom stopping criteria
-- History tracking and management
+- **Multi-Provider AI Support**: OpenAI (GPT-4o, GPT-4), Google Gemini, Anthropic Claude, and Hugging Face models
+- **History-Aware Workflows**: Iterative processes with memory and context from previous iterations
+- **Multi-Round Evaluation**: Advanced metrics that analyze trends and improvements across iterations
+- **Dynamic Prompts**: Adaptive prompts that evolve based on iteration and historical performance
+- **Async Support**: Concurrent batch processing for improved performance
+- **Flexible Configuration**: Support for API keys via environment variables or direct parameters
 
 ## 📦 Installation
 
-The project requires the following main dependencies:
+Install the required dependencies:
 
 ```bash
-pip install torch transformers openai asyncio
+pip install -r requirements.txt
 ```
 
-Detailed dependency list:
-- `torch`: PyTorch deep learning framework
-- `transformers`: Hugging Face model library
-- `openai`: OpenAI API client
-- `asyncio`: Asynchronous programming support
+For specific providers, install optional dependencies:
 
-## 🔧 Quick Start
+```bash
+# For Gemini models
+pip install google-generativeai
 
-### Basic Usage Example
+# For Claude models
+pip install anthropic
+```
+
+## 🔧 Configuration
+
+Set up API keys as environment variables:
+
+```bash
+export OPENAI_API_KEY="your-openai-api-key"
+export GEMINI_API_KEY="your-gemini-api-key"
+export CLAUDE_API_KEY="your-claude-api-key"
+```
+
+Or pass them directly when initializing:
 
 ```python
 from sci_demo.generation import Generation
-from sci_demo.prompt import Prompt
-from sci_demo.oracle import Oracle
-from sci_demo.workflow import Workflow
 
-# 1. Initialize components
-generator = Generation(
-    api_key="your_openai_key",  # or use HF model
-    hf_model_name="meta-llama/Llama-3-7B"
+gen = Generation(
+    openai_api_key="your-openai-key",
+    gemini_api_key="your-gemini-key",
+    claude_api_key="your-claude-key"
 )
-
-oracle = Oracle()
-oracle.register_metric("accuracy", lambda pred, ref: float(pred.strip() == ref.strip()))
-
-# 2. Create prompt
-prompt = Prompt(
-    template_name="summarize",
-    default_vars={"input_text": "Recent breakthroughs in protein folding."}
-)
-
-# 3. Run workflow
-workflow = Workflow(generator=generator, oracle=oracle, max_iterations=3)
-result = workflow.run_sync(
-    prompt=prompt,
-    reference="AlphaFold revolutionized protein structure prediction.",
-    gen_args={"max_tokens": 100, "temperature": 0.7}
-)
-
-print(result)
 ```
 
-### Advanced Usage: Dynamic Workflow
+## 🎯 Core Components
+
+### 1. Generation Class - Multi-Provider AI Text Generation
+
+Unified interface for text generation across multiple AI providers.
+
+#### Supported Models
+
+**OpenAI Models**
+- `gpt-4o` (latest multimodal model)
+- `gpt-4o-mini`
+- `gpt-4-turbo`
+- `gpt-4`
+- `gpt-3.5-turbo`
+
+**Google Gemini Models**
+- `gemini-1.5-pro`
+- `gemini-1.5-flash`
+- `gemini-1.0-pro`
+- `gemini-pro`
+
+**Anthropic Claude Models**
+- `claude-3-5-sonnet-20241022`
+- `claude-3-5-haiku-20241022`
+- `claude-3-opus-20240229`
+- `claude-3-sonnet-20240229`
+
+**Hugging Face Models**
+- Any compatible model from Hugging Face Hub
+
+#### Basic Usage
 
 ```python
-# Dynamic prompt function
-def dynamic_prompt(iteration, history):
-    base_prompt = Prompt(template_name="summarize")
-    if iteration > 1:
-        # Adjust prompt based on historical results
-        last_score = history["scores"][-1] if history["scores"] else {}
-        if last_score.get("accuracy", 0) < 0.5:
-            base_prompt.add_vars(additional="Please be more accurate and detailed")
-    return base_prompt
+from sci_demo.generation import Generation
 
-# Dynamic metrics function
-def dynamic_metrics(iteration, history):
-    if iteration <= 2:
-        return ["length"]
-    return ["accuracy", "relevance"]
+# Initialize with multiple providers
+gen = Generation(
+    openai_api_key="your-openai-key",
+    gemini_api_key="your-gemini-key",
+    claude_api_key="your-claude-key"
+)
 
-# Custom stopping condition
-def stop_condition(context):
-    return context["scores"].get("accuracy", 0) >= 0.9
+# Generate text with GPT-4o
+result = gen.generate(
+    prompt="Explain quantum computing in simple terms",
+    model="gpt-4o",
+    max_tokens=200,
+    temperature=0.7
+)
+
+print(f"Response: {result['text']}")
+print(f"Provider: {result['provider']}")
+print(f"Usage: {result['usage']}")
+```
+
+#### Async Batch Processing
+
+```python
+import asyncio
+
+async def batch_example():
+    prompts = [
+        "What is AI?",
+        "Explain neural networks",
+        "What is deep learning?"
+    ]
+    
+    results = await gen.generate_batch_async(
+        prompts=prompts,
+        model="gpt-4o",
+        max_tokens=100
+    )
+    
+    for i, result in enumerate(results):
+        print(f"Prompt {i+1}: {result['text']}")
+
+asyncio.run(batch_example())
+```
+
+### 2. Prompt Class - History-Aware Prompt Management
+
+Enhanced prompt management with history support for iterative workflows.
+
+#### Template Types
+- `summarize`: Basic summarization template
+- `qa`: Question-answering template
+- `translate`: Translation template
+- `few_shot`: Few-shot learning template
+- `iterative`: Basic iterative template with history context
+- `iterative_with_feedback`: Template that includes previous attempts and scores
+- `conversation`: Template for conversation-style interactions
+
+#### History Support
+
+```python
+from sci_demo.prompt import Prompt
+
+# Create an iterative prompt
+prompt = Prompt(
+    template_name="iterative_with_feedback",
+    default_vars={
+        "task_description": "Write a scientific summary",
+        "input_text": "Quantum computing applications"
+    }
+)
+
+# Add history from previous iterations
+history = {
+    "prompts": ["Previous prompt 1", "Previous prompt 2"],
+    "outputs": ["Previous output 1", "Previous output 2"],
+    "scores": [{"accuracy": 0.6}, {"accuracy": 0.8}]
+}
+
+# Build prompt with history
+final_prompt = prompt.build_with_history(history, current_iteration=3)
+```
+
+### 3. Oracle Class - Multi-Round Evaluation
+
+Advanced evaluation system supporting both single-round and multi-round metrics.
+
+#### Metric Types
+- **Single-Round Metrics**: Traditional metrics that evaluate individual outputs
+- **Multi-Round Metrics**: Metrics that analyze patterns across multiple iterations
+
+#### Built-in Multi-Round Metrics
+- `improvement_rate`: Rate of improvement across iterations
+- `consistency`: Consistency of performance across iterations
+- `convergence`: How well outputs are converging to a stable solution
+
+#### Usage
+
+```python
+from sci_demo.oracle import Oracle, improvement_rate_metric
+
+oracle = Oracle()
+
+# Register traditional metrics
+def accuracy(pred, ref, **kwargs):
+    return float(pred.strip().lower() == ref.strip().lower())
+
+oracle.register_metric("accuracy", accuracy)
+
+# Register multi-round metrics
+oracle.register_multi_round_metric("improvement_rate", improvement_rate_metric)
+
+# Evaluate with history
+scores = oracle.compute_with_history(
+    prediction="Current output",
+    reference="Expected output",
+    history=history_data,
+    current_iteration=3
+)
+```
+
+### 4. Workflow Class - Iterative AI Workflows
+
+Orchestrates multi-stage iterative processes with automatic history integration.
+
+#### Key Features
+- **Automatic History Integration**: Prompts automatically receive history context
+- **Multi-Round Evaluation**: Uses appropriate metrics based on iteration
+- **Trend Analysis**: Analyzes performance trends across iterations
+- **Dynamic Stopping Criteria**: Intelligent stopping based on performance metrics
+
+#### Basic Workflow
+
+```python
+from sci_demo.workflow import Workflow
 
 workflow = Workflow(
-    generator=generator,
+    generator=gen,
     oracle=oracle,
     max_iterations=5,
-    stop_criteria=stop_condition
+    enable_history_in_prompts=True,
+    enable_multi_round_metrics=True
+)
+
+# Create an iterative prompt
+prompt = workflow.create_iterative_prompt(
+    task_description="Summarize scientific concepts",
+    input_text="Machine learning in healthcare",
+    template_type="iterative_with_feedback"
+)
+
+# Run workflow
+result = workflow.run_sync(
+    prompt=prompt,
+    reference="Expected summary",
+    gen_args={"model": "gpt-4o", "max_tokens": 150},
+    history_context={"task_description": "Medical AI summarization"}
+)
+
+print(f"Completed {result['total_iterations']} iterations")
+print(f"Best iteration: {result['best_iteration']}")
+print(f"Final output: {result['history']['outputs'][-1]}")
+```
+
+## 🔥 Advanced Features
+
+### Dynamic Prompts with Iteration-Specific Instructions
+
+```python
+# Create a dynamic prompt function
+dynamic_prompt = workflow.create_dynamic_prompt_function(
+    base_task="Explain quantum computing",
+    base_input="Quantum mechanics in computation",
+    iteration_instructions={
+        1: "Provide a basic explanation",
+        2: "Add technical details",
+        3: "Include real-world applications",
+        4: "Ensure accessibility for general audience"
+    }
 )
 
 result = workflow.run_sync(
     prompt=dynamic_prompt,
-    reference="Target text",
-    metrics=dynamic_metrics
+    reference="Expected explanation",
+    gen_args={"model": "gpt-4o", "max_tokens": 200}
 )
 ```
 
-## 📚 Detailed Documentation
+### Custom Multi-Round Metrics
 
-### Generation Module
-
-Supports two generation modes:
-
-**OpenAI API Mode:**
 ```python
-gen = Generation(api_key="your_key")
-result = gen.generate("Explain quantum computing", max_tokens=100)
+def diversity_metric(history, reference, current_iteration, **kwargs):
+    """Measure diversity of outputs across iterations."""
+    if len(history.get("outputs", [])) < 2:
+        return 0.0
+    
+    outputs = history["outputs"]
+    total_diversity = 0.0
+    total_pairs = 0
+    
+    for i in range(len(outputs)):
+        for j in range(i + 1, len(outputs)):
+            words1 = set(outputs[i].lower().split())
+            words2 = set(outputs[j].lower().split())
+            if len(words1.union(words2)) > 0:
+                diversity = 1.0 - len(words1.intersection(words2)) / len(words1.union(words2))
+                total_diversity += diversity
+                total_pairs += 1
+    
+    return total_diversity / total_pairs if total_pairs > 0 else 0.0
+
+# Register the custom metric
+oracle.register_multi_round_metric("diversity", diversity_metric)
 ```
 
-**Hugging Face Local Model:**
+### Conversation-Style Workflows
+
 ```python
-gen = Generation(hf_model_name="meta-llama/Llama-3-7B")
-result = gen.generate("Explain quantum computing", max_tokens=100)
-```
+def conversation_prompt_fn(iteration, history):
+    if iteration == 1:
+        return Prompt(
+            template_name="conversation",
+            default_vars={"current_message": "Explain photosynthesis"}
+        )
+    else:
+        follow_ups = [
+            "Can you simplify that?",
+            "What role does chlorophyll play?",
+            "How does this relate to climate change?"
+        ]
+        follow_up = follow_ups[min(iteration-2, len(follow_ups)-1)]
+        
+        return Prompt(
+            template_name="conversation",
+            default_vars={"current_message": follow_up}
+        )
 
-### Prompt Module
-
-**Built-in Template Usage:**
-```python
-# Summarization template
-prompt = Prompt(template_name="summarize", default_vars={"input_text": "Text content"})
-
-# Q&A template
-prompt = Prompt(template_name="qa", default_vars={
-    "context": "Context information",
-    "question": "Question"
-})
-
-# Custom template
-prompt = Prompt(
-    custom_template="Please analyze the following scientific paper: {paper_content}",
-    default_vars={"paper_content": "Paper content"}
+result = workflow.run_sync(
+    prompt=conversation_prompt_fn,
+    reference="Expected explanation",
+    gen_args={"model": "gpt-4o", "max_tokens": 120}
 )
 ```
 
-**Few-shot Learning:**
+### Intelligent Stopping Criteria
+
 ```python
-fs_prompt = Prompt(template_name="few_shot")
-fs_prompt.add_example("Input example 1", "Output example 1")
-fs_prompt.add_example("Input example 2", "Output example 2")
-fs_prompt.add_vars(input_text="New input")
+def intelligent_stopping_criteria(context):
+    scores = context["scores"]
+    iteration = context["iteration"]
+    
+    # Stop if accuracy is high enough
+    if scores.get("accuracy", 0) >= 0.9:
+        return True
+    
+    # Stop if improvement rate is very low after iteration 3
+    if iteration >= 3 and scores.get("improvement_rate", 0) < 0.01:
+        return True
+    
+    # Stop if convergence is high and consistency is good
+    if (scores.get("convergence", 0) >= 0.8 and 
+        scores.get("consistency", 0) >= 0.7):
+        return True
+    
+    return False
+
+workflow.stop_criteria = intelligent_stopping_criteria
 ```
 
-### Oracle Module
+## 📊 Result Analysis
 
-**Register Custom Metrics:**
+The framework returns comprehensive results with detailed analysis:
+
 ```python
+result = {
+    "history": {
+        "prompts": [...],           # All prompts used
+        "outputs": [...],           # All generated outputs
+        "scores": [...],            # All evaluation scores
+        "raw_outputs": [...],       # Full generation responses
+        "iterations": [...]         # Iteration numbers
+    },
+    "total_iterations": 4,          # Number of iterations completed
+    "final_scores": {...},          # Final iteration scores
+    "best_iteration": {             # Best performing iteration
+        "iteration": 3,
+        "score": 0.85,
+        "output": "..."
+    },
+    "trend_analysis": {             # Trend analysis for each metric
+        "accuracy_trends": {
+            "improvement_rate": 0.05,
+            "total_improvement": 0.2,
+            "consistency": 0.8,
+            "best_score": 0.9
+        }
+    }
+}
+```
+
+## 📚 Examples
+
+### Basic Multi-Provider Usage
+
+```python
+from sci_demo.generation import Generation
+
+gen = Generation(
+    openai_api_key="your-openai-key",
+    gemini_api_key="your-gemini-key",
+    claude_api_key="your-claude-key"
+)
+
+# Test different models
+models = ["gpt-4o", "gemini-1.5-pro", "claude-3-5-sonnet-20241022"]
+prompt = "Write a haiku about artificial intelligence"
+
+for model in models:
+    result = gen.generate(
+        prompt=prompt,
+        model=model,
+        max_tokens=100,
+        temperature=0.8
+    )
+    print(f"\n{model}:")
+    print(result['text'])
+```
+
+### Complete Iterative Workflow
+
+```python
+from sci_demo.generation import Generation
+from sci_demo.workflow import Workflow
+from sci_demo.oracle import Oracle, improvement_rate_metric
+
+# Setup components
+gen = Generation(openai_api_key="your-key")
 oracle = Oracle()
 
-# Accuracy metric
-def accuracy(prediction, reference, **kwargs):
-    return float(prediction.strip().lower() == reference.strip().lower())
+# Register metrics
+def accuracy(pred, ref, **kwargs):
+    return float(pred.strip().lower() == ref.strip().lower())
 
-# BLEU score metric
-def bleu_score(prediction, reference, **kwargs):
-    # Implement BLEU calculation logic
-    return 0.75
+def relevance(pred, ref, **kwargs):
+    pred_words = set(pred.lower().split())
+    ref_words = set(ref.lower().split())
+    if not ref_words:
+        return 0.0
+    return len(pred_words.intersection(ref_words)) / len(ref_words)
 
 oracle.register_metric("accuracy", accuracy)
-oracle.register_metric("bleu", bleu_score)
+oracle.register_metric("relevance", relevance)
+oracle.register_multi_round_metric("improvement_rate", improvement_rate_metric)
 
-# Compute metrics
-scores = oracle.compute(prediction="Predicted text", reference="Reference text")
+# Create workflow
+workflow = Workflow(
+    generator=gen,
+    oracle=oracle,
+    max_iterations=4,
+    enable_history_in_prompts=True,
+    enable_multi_round_metrics=True
+)
+
+# Dynamic prompt with iteration-specific instructions
+dynamic_prompt = workflow.create_dynamic_prompt_function(
+    base_task="Write a scientific summary",
+    base_input="Recent advances in quantum computing",
+    iteration_instructions={
+        1: "Provide a basic overview",
+        2: "Add technical details and examples",
+        3: "Include potential applications",
+        4: "Ensure clarity and accessibility"
+    }
+)
+
+# Run workflow
+result = workflow.run_sync(
+    prompt=dynamic_prompt,
+    reference="Quantum computing leverages quantum mechanics for computational advantages",
+    gen_args={"model": "gpt-4o", "max_tokens": 150, "temperature": 0.7},
+    history_context={"task_description": "Scientific summarization task"}
+)
+
+# Analyze results
+print(f"Completed {result['total_iterations']} iterations")
+print(f"Final scores: {result['final_scores']}")
+print(f"Best iteration: {result['best_iteration']['iteration']}")
+print(f"Improvement rate: {result['final_scores'].get('improvement_rate', 0):.3f}")
 ```
 
-## 🔬 Application Scenarios
+## 🛠️ Performance Tips
 
-1. **Scientific Literature Summarization and Optimization**
-2. **Hypothesis Generation and Validation**
-3. **Experimental Design Recommendations**
-4. **Data Analysis Report Generation**
-5. **Scientific Question-Answering Systems**
-6. **Research Direction Exploration**
+1. **Enable History Selectively**: Use `enable_history_in_prompts=False` for simple tasks that don't benefit from history
 
-## 🛠️ Extension Development
+2. **Choose Appropriate Templates**:
+   - Use `iterative` for basic iteration
+   - Use `iterative_with_feedback` when you want to show scores
+   - Use `conversation` for dialogue-style interactions
 
-### Adding New Evaluation Metrics
+3. **Model Selection**: Choose the right model for your use case:
+   - `gpt-4o`: Best overall performance, multimodal capabilities
+   - `gpt-4o-mini`: Faster and cheaper alternative
+   - `gemini-1.5-flash`: Fast responses with good quality
+   - `claude-3-5-haiku`: Quick responses for simple tasks
+
+4. **Async Processing**: Use async methods for batch processing:
+   ```python
+   results = await gen.generate_batch_async(prompts, model="gpt-4o")
+   ```
+
+5. **Memory Management**: For long workflows, consider limiting history size in custom prompt functions
+
+## 📁 Project Structure
+
+```
+sci_demo/
+├── generation.py          # Multi-provider AI text generation
+├── prompt.py             # History-aware prompt management
+├── oracle.py             # Multi-round evaluation system
+└── workflow.py           # Iterative workflow orchestration
+
+examples/
+├── generation_examples.py        # Basic generation examples
+└── history_workflow_examples.py  # Advanced workflow examples
+
+requirements.txt          # Project dependencies
+README.md                 # This file
+```
+
+## 🔍 Troubleshooting
+
+### Common Issues
+
+1. **API Key Not Found**: Ensure environment variables are set or pass keys directly
+2. **Model Not Available**: Check if the model name is correct and the provider is configured
+3. **Import Errors**: Install optional dependencies for Gemini (`google-generativeai`) or Claude (`anthropic`)
+4. **Template Variables Missing**: Ensure all required variables are provided or use default values
+5. **Multi-Round Metrics Errors**: Check that history data structure is correct
+
+### Debug Mode
+
+Enable detailed logging:
 
 ```python
-def custom_metric(prediction, reference, **kwargs):
-    # Implement your evaluation logic
-    score = calculate_score(prediction, reference)
-    return score
+import logging
+logging.basicConfig(level=logging.DEBUG)
 
-oracle.register_metric("custom_metric", custom_metric)
+# The workflow will now print detailed information about each iteration
 ```
 
-### Creating Custom Workflows
+## 🚀 Getting Started
 
-```python
-class CustomWorkflow(Workflow):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-    
-    def custom_processing(self, output):
-        # Add custom processing logic
-        return processed_output
-```
+1. **Install dependencies**:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+2. **Set up API keys**:
+   ```bash
+   export OPENAI_API_KEY="your-openai-key"
+   export GEMINI_API_KEY="your-gemini-key"
+   export CLAUDE_API_KEY="your-claude-key"
+   ```
+
+3. **Run basic example**:
+   ```python
+   from sci_demo.generation import Generation
+   
+   gen = Generation(openai_api_key="your-key")
+   result = gen.generate("Explain AI in simple terms", model="gpt-4o")
+   print(result['text'])
+   ```
+
+4. **Try advanced workflows**:
+   ```bash
+   python examples/history_workflow_examples.py
+   ```
+
+## 🤝 Contributing
+
+When adding new features:
+
+1. Update prompt templates in `Prompt._load_builtin_templates()`
+2. Add new multi-round metrics following the signature: `(history, reference, current_iteration, **kwargs) -> float`
+3. Update workflow logic in `Workflow.run()` method
+4. Add comprehensive tests and examples
+5. Update this documentation
 
 ## 📄 License
 
 This project is licensed under the MIT License.
-
-## 🤝 Contributing
-
-We welcome Issues and Pull Requests!
-
-1. Fork this repository
-2. Create a feature branch (`git checkout -b feature/new-feature`)
-3. Commit your changes (`git commit -am 'Add new feature'`)
-4. Push to the branch (`git push origin feature/new-feature`)
-5. Create a Pull Request
-
-## 📧 Contact
-
-For questions or suggestions, please contact us through Issues.
-
----
-
-**Note**: Please ensure you have properly configured your OpenAI API key or downloaded the corresponding Hugging Face models before use.

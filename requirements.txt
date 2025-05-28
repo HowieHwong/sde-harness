@@ -2,13 +2,21 @@
 torch>=2.0.0
 transformers>=4.30.0
 openai>=1.0.0
+numpy>=1.21.0
 
 # Optional dependencies for enhanced functionality
-numpy>=1.21.0
 scipy>=1.9.0
 scikit-learn>=1.1.0
 
 # Development dependencies
 pytest>=7.0.0
 black>=22.0.0
-flake8>=5.0.0 
+flake8>=5.0.0
+
+# Optional dependencies for additional model providers
+google-generativeai>=0.3.0  # For Gemini models
+anthropic>=0.25.0           # For Claude models
+
+# Additional utilities
+asyncio-throttle>=1.0.0     # For rate limiting (optional)
+tenacity>=8.0.0             # For retry logic (optional) 
