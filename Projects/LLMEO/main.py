@@ -16,7 +16,7 @@ import pandas as pd
 from _utils import make_text_for_existing_tmcs, retrive_tmc_from_message, find_tmc_in_space
 
 generator = Generation(
-     openai_api_key="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",  
+     openai_api_key=os.getenv("OPENAI_API_KEY"),  
 )
 
 with open("data/1M-space_50-ligands-full.csv", "r") as fo:
