@@ -11,7 +11,10 @@
    ```
 
 
-2. Add your API key to Generator() in main.py
+2. Add your API key as environment variable
+    ```bash
+    export OPENAI_API_KEY="your-api-key-here"
+    ```
 
 3. Download required dataset:
     ```
@@ -23,6 +26,13 @@
     conda env create -f environment.yml
     conda activate ScienceBench_LLMEO
     ```
+
+4.5 (Optional)
+    If you are inconfident with you setup, you can run the test file:
+    ```
+    python test.py
+    ```
+    
 
 5. Run the application:
     ```

@@ -1,28 +1,6 @@
 from typing import Dict, List, Optional
 import pandas as pd
 import re
-
-class TMCExplorer:
-
-    def __init__(self, initial_explored_tmc: pd.DataFrame):
-        self.explored_tmc = initial_explored_tmc.copy()
-    
-    def calculate_top10_avg_gap(self, text: str, df_tmc: pd.DataFrame) -> float:
-
-        top10_tmc = retrive_tmc_from_message(text, 10)
-        top10_tmc_df = find_tmc_in_space(df_tmc, top10_tmc)
-        if top10_tmc_df is not None:
-            self.explored_tmc = pd.concat([self.explored_tmc, top10_tmc_df]).drop_duplicates()
-        return self.explored_tmc["gap"].nlargest(10).mean()
-    
-    def get_explored_tmc(self) -> pd.DataFrame:
-
-        return self.explored_tmc.copy()
-    
-    def add_tmcs(self, new_tmcs: pd.DataFrame):
-
-        self.explored_tmc = pd.concat([self.explored_tmc, new_tmcs]).drop_duplicates()
-
 def make_text_for_existing_tmcs(
     df: pd.DataFrame, 
     lig_charge: Dict[str, int], 
