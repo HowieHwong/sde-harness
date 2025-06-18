@@ -28,7 +28,7 @@
     ```
 
 4.5 (Optional)
-    If you are inconfident with you setup, you can run the test file:
+    If you are unconfident with you setup, you can run the test file:
     ```
     python test.py
     ```
