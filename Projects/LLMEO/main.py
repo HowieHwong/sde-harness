@@ -53,7 +53,6 @@ def improvement_rate_metric(history: Dict[str, List[Any]], reference: Any, curre
 oracle = Oracle()
 oracle.register_multi_round_metric("top10_avg_gap", improvement_rate_metric)
 
-
 # Dynamic prompt function
 def prompt_fn(iteration, history):
     if(iteration > 1):
@@ -68,8 +67,33 @@ def prompt_fn(iteration, history):
 
 workflow = Workflow(generator=generator, oracle=oracle, max_iterations=2, enable_multi_round_metrics=True)
 
-result = workflow.run_sync(
-    prompt= prompt_fn,
+# result = workflow.run_sync(
+#     prompt= prompt_fn,
+#     reference= df_tmc,
+#     gen_args={"max_tokens": 5000, "temperature": 0.0}
+# )
+
+#few shot
+prompt_fewShot = Prompt(
+    custom_template=PROMPT_G,
+    default_vars={"CSV_FILE_CONTENT": df_ligands_str,
+                  "CURRENT_SAMPLES": text_tmc,
+                  "NUM_PROVIDED_SAMPLES": len(tmc_samples),
+                  "NUM_SAMPLES": 10}
+)
+
+oracle_fewShot = Oracle()
+def top10_avg_gap(response: str, reference: Any) -> float:
+    current_round_tmc = find_tmc_in_space(reference, retrive_tmc_from_message(response, 10))
+    if(current_round_tmc is None or current_round_tmc.empty):
+        return 0
+    else:
+        return current_round_tmc["gap"].nlargest(10).mean()
+oracle_fewShot.register_metric("top10_avg_gap", top10_avg_gap)
+
+workflow_fewShot = Workflow(generator=generator, oracle=oracle_fewShot, max_iterations=2, enable_multi_round_metrics=True)
+result_fewShot = workflow_fewShot.run_sync(
+    prompt= prompt,
     reference= df_tmc,
     gen_args={"max_tokens": 5000, "temperature": 0.0}
 )
