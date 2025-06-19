@@ -5,7 +5,7 @@ from unittest.mock import patch, MagicMock
 import sys
 import os
 
-# 添加项目根目录到 Python 路径
+# Add project root to Python path
 project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, project_root)
 
@@ -17,21 +17,21 @@ from sci_demo.prompt import Prompt
 from sci_demo.oracle import Oracle
 
 class TestUtils(unittest.TestCase):
-    """测试_utils.py中的工具函数"""
+    """Test utils.py"""
     
     def test_Generation(self):
-        """测试Generation类"""
+        """Test Generation class"""
         API_Key = os.getenv("OPENAI_API_KEY")
         response = Generation(API_Key).generate("Hello, nice to meet you")
         self.assertIsNotNone(response)
     
     def test_dataset_exists(self):
-        """测试数据集是否存在"""
+        """Test if dataset exists"""
         self.assertTrue(os.path.exists("data/1M-space_50-ligands-full.csv"))
         self.assertTrue(os.path.exists("data/ground_truth_fitness_values.csv"))
 
     def test_prompt_exists(self):
-        """测试prompt是否存在"""
+        """Test if prompt exists"""
         self.assertIsNotNone(PROMPT_G)
 
     def test_prompt(self):

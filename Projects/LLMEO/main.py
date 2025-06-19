@@ -2,7 +2,7 @@ import sys
 import os
 from typing import Any, Dict, List
 
-# 添加项目根目录到 Python 路径
+# Add project root to Python path
 project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, project_root)
 
