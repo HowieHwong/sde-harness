@@ -1,9 +1,9 @@
 import asyncio
 from typing import Any, Dict, List, Optional, Callable, Union
 
-from generation import Generation
-from prompt import Prompt
-from oracle import Oracle
+from .generation import Generation
+from .prompt import Prompt
+from .oracle import Oracle
 
 
 class Workflow:
