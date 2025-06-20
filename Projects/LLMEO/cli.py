@@ -14,7 +14,7 @@ project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(_
 sys.path.insert(0, project_root)
 
 # Import local modules
-from modes import run_few_shot, run_single_prop, run_multi_prop, run_diy_gen
+from modes import run_few_shot, run_single_prop, run_multi_prop
 from utils.data_loader import validate_data_files
 from config.settings import get_default_config, validate_config
 
@@ -69,11 +69,11 @@ Example usage:
     multi_prop_parser.add_argument('--iterations', type=int, default=2, help='Iteration number (default: 2)')
     
     # DIY generation mode
-    diy_gen_parser = subparsers.add_parser(
-        'diy-gen', 
-        parents=[common_args],
-        help='DIY generation mode - Custom generation parameters'
-    )
+    # diy_gen_parser = subparsers.add_parser(
+    #     'diy-gen', 
+    #     parents=[common_args],
+    #     help='DIY generation mode - Custom generation parameters'
+    # )
     
     # Parse arguments
     args = parser.parse_args()
@@ -107,8 +107,6 @@ Example usage:
             run_single_prop(args)
         elif args.mode == 'multi-prop':
             run_multi_prop(args)
-        elif args.mode == 'diy-gen':
-            run_diy_gen(args)
         else:
             print(f"❌ Unknown mode: {args.mode}")
             sys.exit(1)
