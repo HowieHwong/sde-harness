@@ -6,25 +6,32 @@ import sys
 import os
 
 # Add project root to Python path
-project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+project_root = os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+)
 sys.path.insert(0, project_root)
 
-from _utils import make_text_for_existing_tmcs, retrive_tmc_from_message, find_tmc_in_space
+from _utils import (
+    make_text_for_existing_tmcs,
+    retrive_tmc_from_message,
+    find_tmc_in_space,
+)
 from prompt import PROMPT_G
 from sci_demo.workflow import Workflow
 from sci_demo.generation import Generation
 from sci_demo.prompt import Prompt
 from sci_demo.oracle import Oracle
 
+
 class TestUtils(unittest.TestCase):
     """Test utils.py"""
-    
+
     def test_Generation(self):
         """Test Generation class"""
         API_Key = os.getenv("OPENAI_API_KEY")
         response = Generation(API_Key).generate("Hello, nice to meet you")
         self.assertIsNotNone(response)
-    
+
     def test_dataset_exists(self):
         """Test if dataset exists"""
         self.assertTrue(os.path.exists("data/1M-space_50-ligands-full.csv"))
@@ -47,15 +54,22 @@ class TestUtils(unittest.TestCase):
         self.assertIsNotNone(text_tmc)
         prompt = Prompt(
             custom_template=PROMPT_G,
-            default_vars={"CSV_FILE_CONTENT": df_ligands_str,
-                        "CURRENT_SAMPLES": text_tmc,
-                        "NUM_PROVIDED_SAMPLES": len(tmc_samples),
-                        "NUM_SAMPLES": 10}
+            default_vars={
+                "CSV_FILE_CONTENT": df_ligands_str,
+                "CURRENT_SAMPLES": text_tmc,
+                "NUM_PROVIDED_SAMPLES": len(tmc_samples),
+                "NUM_SAMPLES": 10,
+            },
         )
         self.assertIsNotNone(prompt)
-    
+
     def test_oracle(self):
-        def improvement_rate_metric(history: Dict[str, List[Any]], reference: Any, current_iteration: int, **kwargs) -> float:
+        def improvement_rate_metric(
+            history: Dict[str, List[Any]],
+            reference: Any,
+            current_iteration: int,
+            **kwargs
+        ) -> float:
             return 1.0
 
         oracle = Oracle()
@@ -63,6 +77,5 @@ class TestUtils(unittest.TestCase):
         self.assertEqual(oracle.list_multi_round_metrics(), ["top10_avg_gap"])
 
 
-
-if __name__ == '__main__':
-    unittest.main() 
+if __name__ == "__main__":
+    unittest.main()

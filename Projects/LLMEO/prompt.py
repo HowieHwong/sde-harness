@@ -1,5 +1,3 @@
-
-
 PROMPT_G = (
     "I have a pool of 50 ligands in a csv file format below.\n"
     + "{CSV_FILE_CONTENT}"
@@ -75,4 +73,3 @@ PROMPT_MB = (
     + "5. $GAP is your prediction of the HOMO-LUMO gap for $TMC based on your chemistry knowledge and provided data.\n"
     + "6. $polarisability is your prediction of the polarisability for $TMC based on your chemistry knowledge and provided data.\n"
 )
-

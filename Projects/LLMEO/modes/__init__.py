@@ -12,8 +12,4 @@ from .few_shot import run_few_shot
 from .single_prop import run_single_prop
 from .multi_prop import run_multi_prop
 
-__all__ = [
-    'run_few_shot',
-    'run_single_prop', 
-    'run_multi_prop'
-] 
+__all__ = ["run_few_shot", "run_single_prop", "run_multi_prop"]
