@@ -15,8 +15,8 @@ dependencies:
   - anthropic=0.39.0
   - rdkit=2024.09.2
   - httpx=0.28.1
-  - transformers
-  - torch
   - pip:
+    - torch
+    - transformers
     - molsimplify==1.7.5
     - git+https://github.com/hkneiding/uxtbpy
