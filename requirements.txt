@@ -3,6 +3,7 @@ torch>=2.0.0
 transformers>=4.30.0
 openai>=1.0.0
 numpy>=1.21.0
+litellm>=1.73.6
 
 # Optional dependencies for enhanced functionality
 scipy>=1.9.0
@@ -20,6 +21,3 @@ anthropic>=0.25.0           # For Claude models
 # Additional utilities
 asyncio-throttle>=1.0.0     # For rate limiting (optional)
 tenacity>=8.0.0             # For retry logic (optional) 
-
-
-

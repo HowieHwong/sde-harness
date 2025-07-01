@@ -1,3 +1,12 @@
 *.pyc
 quick_implemtation_guide.md
 ground_truth_fitness_values.csv
+
+.DS_Store
+credentials.yaml
+models.yaml
+
+
+*.ipynb
+.vscode
+.venv

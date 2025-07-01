@@ -1,0 +1,57 @@
+# Instructions:
+# Add models that you want to use in this file.
+# ===== An Example =====
+# openai/gpt-4o-2024-08-06:    <- You can use any name you want for the model. Recommend using provider/model-version for clarity.
+#   provider: openai           <- The provider supported in LiteLLM (https://docs.litellm.ai/docs/providers). 
+#   model: gpt-4o-2024-08-06   <- The model name.
+#   credentials: openai        <- The corresponding credential tag that you set in credentials.yaml.
+#   __call_args:               <- Optional. Arguments to pass to the model. You could also pass them in the generate() function, which would have higher priority.
+#     top_p: 0.95
+#     thinking:
+#       type: enabled
+#       budget_tokens: 20000
+# ======================
+
+openai/gpt-4o-2024-08-06:
+  provider: openai
+  model: gpt-4o-2024-08-06
+  credentials: openai
+
+anthropic/claude-3-7-sonnet-20250219:
+  provider: anthropic
+  model: claude-3-7-sonnet-20250219
+  credentials: anthropic
+
+gemini/gemini-2.5-flash:
+  provider: gemini
+  model: gemini-2.5-flash
+  credentials: gemini
+
+huggingface/Qwen/Qwen3-32B:
+  provider: local    # <- If you want to deploy a local model from Hugging Face, set provider to "local".
+  model: Qwen/Qwen3-32B
+  credentials: null
+
+huggingface/Qwen/Qwen3-0.6B:
+  provider: local    # <- If you want to deploy a local model from Hugging Face, set provider to "local".
+  model: Qwen/Qwen3-0.6B
+  credentials: null
+
+azure/o3-mini-2025-01-31:
+  provider: azure
+  model: o3-mini-2025-01-31
+  credentials: azure
+
+bedrock/claude-3-7-sonnet-20250219-thinking:
+  provider: bedrock
+  model: us.anthropic.claude-3-7-sonnet-20250219-v1:0
+  credentials: bedrock
+  __call_args:
+    thinking:
+      type: enabled
+      budget_tokens: 15360
+
+bedrock/us.deepseek.r1-v1:0:
+  provider: bedrock
+  model: us.deepseek.r1-v1:0
+  credentials: bedrock
