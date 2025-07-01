@@ -1,7 +1,5 @@
-import os
 import yaml
 from typing import Optional, Union, Dict, Any, List
-from enum import Enum
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
@@ -376,28 +374,23 @@ class Generation:
 
 
 if __name__ == "__main__":
-    # Example usage
-    import asyncio
-
     # Initialize with multiple providers
     with Generation(max_workers=8) as gen:
         
-        # List available models
-        print("Available models:", gen.list_available_models())
-        
         # Test different models
         prompts = ["Hello world!", "What is AI?", "Science discovery?"]
-        models = ["openai/gpt-4o-2024-08-06", "anthropic/claude-3-7-sonnet-20250219", "gemini/gemini-2.5-flash"]
+        models = ["bedrock/claude-3-7-sonnet-20250219",]
         
         async def test_models():
             for model in models:
                 try:
                     print(f"\nTesting {model}:")
-                    results = await gen.generate_batch_async(prompts, model_name=model, max_tokens=50)
+                    results = await gen.generate_batch_async(prompts, model_name=model)
                     for i, res in enumerate(results):
                         print(f"  Prompt {i}: {res['text'][:100]}...")
                 except Exception as e:
                     print(f"  Error with {model}: {e}")
+                    raise e
         
         # Run async test
         asyncio.run(test_models())
