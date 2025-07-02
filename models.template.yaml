@@ -17,6 +17,11 @@ openai/gpt-4o-2024-08-06:
   model: gpt-4o-2024-08-06
   credentials: openai
 
+openai/gpt-4.1-nano-2025-04-14:
+  provider: openai
+  model: gpt-4.1-nano-2025-04-14
+  credentials: openai
+
 anthropic/claude-3-7-sonnet-20250219:
   provider: anthropic
   model: claude-3-7-sonnet-20250219
@@ -42,14 +47,15 @@ azure/o3-mini-2025-01-31:
   model: o3-mini-2025-01-31
   credentials: azure
 
-bedrock/claude-3-7-sonnet-20250219-thinking:
+bedrock/claude-3-haiku-20240307:
+  provider: bedrock
+  model: us.anthropic.claude-3-haiku-20240307-v1:0
+  credentials: bedrock
+
+bedrock/claude-3-7-sonnet-20250219:
   provider: bedrock
   model: us.anthropic.claude-3-7-sonnet-20250219-v1:0
   credentials: bedrock
-  __call_args:
-    thinking:
-      type: enabled
-      budget_tokens: 15360
 
 bedrock/us.deepseek.r1-v1:0:
   provider: bedrock

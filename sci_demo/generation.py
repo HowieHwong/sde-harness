@@ -11,6 +11,14 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
 import torch
 import litellm
 
+# Recording
+import weave
+try:
+    from .utils import safe_weave_log
+except ImportError:
+    # Handle direct execution
+    from utils import safe_weave_log
+
 
 def load_models_and_credentials(models_file="models.yaml", credentials_file="credentials.yaml"):
     """Load configuration files with proper error handling."""
@@ -177,6 +185,7 @@ class Generation:
                 self._cleanup_hf_model()
                 raise RuntimeError(f"Failed to load HuggingFace model {model_name}: {e}")
 
+    @weave.op()
     def generate(
         self,
         prompt: Optional[str] = None,
@@ -316,7 +325,7 @@ class Generation:
                 "provider": model_config["provider"],
                 "model": model_config["model"],
                 "text": new_text,
-                "usage": None,
+                # "usage": None,
             }
         except Exception as e:
             raise RuntimeError(f"HuggingFace generation failed for model {model_config['model']}: {e}")
@@ -374,12 +383,15 @@ class Generation:
 
 
 if __name__ == "__main__":
+    # Initialize weave for testing this module only
+    weave.init("generation_module_test")
+    
     # Initialize with multiple providers
     with Generation(max_workers=8) as gen:
         
         # Test different models
-        prompts = ["Hello world!", "What is AI?", "Science discovery?"]
-        models = ["bedrock/claude-3-7-sonnet-20250219",]
+        prompts = ["Hello world!"]
+        models = ["huggingface/Qwen/Qwen3-0.6B"]
         
         async def test_models():
             for model in models:
