@@ -3,7 +3,7 @@ Utility functions for sci_demo framework.
 """
 
 import weave
-from typing import Optional, Any, Dict
+from typing import Any, Dict
 
 def is_weave_initialized() -> bool:
     """Check if weave has been initialized by the user."""
@@ -30,9 +30,3 @@ def safe_weave_log(data: Dict[str, Any]) -> None:
     except Exception:
         # Silently ignore if weave is not properly initialized or call context unavailable
         pass
-
-def safe_weave_op(func):
-    """Decorator that only applies @weave.op() if weave is initialized."""
-    if is_weave_initialized():
-        return weave.op()(func)
-    return func 

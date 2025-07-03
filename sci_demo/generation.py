@@ -1,23 +1,16 @@
-import yaml
-from typing import Optional, Union, Dict, Any, List
 import asyncio
-from concurrent.futures import ThreadPoolExecutor
-from copy import deepcopy
 import threading
+from typing import Any, Dict, List, Optional, Union
+import yaml
+from copy import deepcopy
 import gc
 
+import weave
+
 # API clients
-from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
+from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
 import torch
 import litellm
-
-# Recording
-import weave
-try:
-    from .utils import safe_weave_log
-except ImportError:
-    # Handle direct execution
-    from utils import safe_weave_log
 
 
 def load_models_and_credentials(models_file="models.yaml", credentials_file="credentials.yaml"):
@@ -67,25 +60,43 @@ def load_model_config(model_name, models, credentials):
 
 
 def validate_device(device):
-    """Validate if the specified device is available."""
+    """
+    Validate and return the appropriate device configuration.
+    
+    Args:
+        device: Device specification (str or int or None)
+        
+    Returns:
+        str: Valid device string
+    """
     if device is None:
-        return "cuda" if torch.cuda.is_available() else "cpu"
-    
-    if isinstance(device, str):
-        if device == "cuda" and not torch.cuda.is_available():
-            raise ValueError("CUDA device requested but not available")
-        if device.startswith("cuda:"):
-            device_idx = int(device.split(":")[1])
-            if device_idx >= torch.cuda.device_count():
-                raise ValueError(f"CUDA device {device_idx} not available. Available devices: 0-{torch.cuda.device_count()-1}")
+        if torch.cuda.is_available():
+            return "cuda"
+        else:
+            return "cpu"
     elif isinstance(device, int):
-        if device >= torch.cuda.device_count():
-            raise ValueError(f"CUDA device {device} not available. Available devices: 0-{torch.cuda.device_count()-1}")
-    
-    return device
+        if torch.cuda.is_available() and device < torch.cuda.device_count():
+            return f"cuda:{device}"
+        else:
+            return "cpu"
+    elif isinstance(device, str):
+        if device.startswith("cuda"):
+            if torch.cuda.is_available():
+                return device
+            else:
+                print(f"Warning: CUDA requested but not available, falling back to CPU")
+                return "cpu"
+        return device
+    else:
+        raise ValueError(f"Invalid device specification: {device}")
 
 
 class Generation:
+    """
+    A unified generator supporting OpenAI (GPT-4o, GPT-4, etc.), Google Gemini, 
+    Anthropic Claude, and Hugging Face models with optional concurrency.
+    """
+    
     def __init__(
         self,
         models_file: str = "models.yaml",
@@ -117,8 +128,8 @@ class Generation:
         self.generator = None
         self._model_lock = threading.Lock()  # Thread safety for model loading
 
-        # Thread pool for concurrency
-        self.executor = ThreadPoolExecutor(max_workers=max_workers)
+        # Thread pool for concurrency - use weave.ThreadPoolExecutor for proper context
+        self.executor = weave.ThreadPoolExecutor(max_workers=max_workers)
         self._closed = False
 
     def __enter__(self):
@@ -238,7 +249,8 @@ class Generation:
             messages=messages,
             **kwargs,
         )
-        
+    
+    @weave.op()
     def _generate_litellm(
         self,
         model_config,
@@ -281,6 +293,7 @@ class Generation:
             "finish_reason": response.choices[0].finish_reason,
         }
     
+    @weave.op()
     def _generate_hf(
         self,
         model_config,
@@ -391,7 +404,7 @@ if __name__ == "__main__":
         
         # Test different models
         prompts = ["Hello world!"]
-        models = ["huggingface/Qwen/Qwen3-0.6B"]
+        models = ["openai/gpt-4.1-nano-2025-04-14", "huggingface/Qwen/Qwen3-0.6B"]
         
         async def test_models():
             for model in models:
