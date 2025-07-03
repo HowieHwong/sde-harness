@@ -522,27 +522,3 @@ When adding new features:
 ## 📄 License
 
 This project is licensed under the MIT License.
-
-## Quick Start
-
-### Basic Usage
-
-```python
-# Step 1: Initialize Weave with YOUR project name (optional)
-import weave
-weave.init("my_research_project")  # YOU control the project name
-
-# Step 2: Import framework components
-from sci_demo import Generation, Workflow, Oracle, Prompt
-
-# Step 3: Build your experiment
-gen = Generation()
-oracle = Oracle()
-workflow = Workflow(gen, oracle)
-
-# Step 4: Run with comprehensive tracking
-result = workflow.run_sync(
-    prompt=my_prompt,
-    reference=reference_data
-)
-```
