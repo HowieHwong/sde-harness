@@ -13,7 +13,10 @@ def basic_usage_example():
     """Basic usage example with different model providers."""
     
     # Initialize the Generation class using YAML configuration
-    with Generation() as gen:
+    with Generation(
+        models_file="models.yaml",
+        credentials_file="credentials.yaml"
+    ) as gen:
         
         # Test prompt
         prompt = "Explain the concept of quantum entanglement in simple terms."
@@ -46,7 +49,11 @@ def basic_usage_example():
 async def async_batch_example():
     """Example of asynchronous batch processing."""
     
-    with Generation(max_workers=4) as gen:
+    with Generation(
+        models_file="models.yaml",
+        credentials_file="credentials.yaml",
+        max_workers=4
+    ) as gen:
         
         # Multiple prompts for batch processing
         prompts = [
@@ -81,7 +88,10 @@ async def async_batch_example():
 def chat_conversation_example():
     """Example of maintaining a conversation context."""
     
-    with Generation() as gen:
+    with Generation(
+        models_file="models.yaml",
+        credentials_file="credentials.yaml"
+    ) as gen:
         
         # Conversation history
         messages = [
@@ -122,7 +132,10 @@ def chat_conversation_example():
 def model_comparison_example():
     """Compare responses from different models for the same prompt."""
     
-    with Generation() as gen:
+    with Generation(
+        models_file="models.yaml",
+        credentials_file="credentials.yaml"
+    ) as gen:
         
         prompt = "Write a creative short story about a robot discovering emotions."
         
@@ -156,7 +169,10 @@ def model_comparison_example():
 def huggingface_example():
     """Example using Hugging Face models (local models)."""
     
-    with Generation() as gen:
+    with Generation(
+        models_file="models.yaml",
+        credentials_file="credentials.yaml"
+    ) as gen:
         
         # Test with a local HuggingFace model
         # Make sure you have this model configured in your models.yaml with provider: local
@@ -189,7 +205,10 @@ def huggingface_example():
 def error_handling_example():
     """Example demonstrating proper error handling."""
     
-    with Generation() as gen:
+    with Generation(
+        models_file="models.yaml",
+        credentials_file="credentials.yaml"
+    ) as gen:
         
         print("Testing error handling scenarios...\n")
         

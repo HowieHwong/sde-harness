@@ -4,7 +4,7 @@ A comprehensive framework for AI-powered scientific discovery with multi-provide
 
 ## 🚀 Features
 
-- **Multi-Provider AI Support**: OpenAI (GPT-4o, GPT-4), Google Gemini, Anthropic Claude, and Hugging Face models
+- **Multi-Provider AI Support**: Supports almost all LLMs via [LiteLLM](https://docs.litellm.ai/docs/providers) and also supports running local models from Hugging Face.
 - **History-Aware Workflows**: Iterative processes with memory and context from previous iterations
 - **Multi-Round Evaluation**: Advanced metrics that analyze trends and improvements across iterations
 - **Dynamic Prompts**: Adaptive prompts that evolve based on iteration and historical performance
@@ -19,37 +19,20 @@ Install the required dependencies:
 pip install -r requirements.txt
 ```
 
-For specific providers, install optional dependencies:
+This only installs the basic dependencies for the framework and some LLM providers. You may need to install additional dependencies for specific LLMs.
 
-```bash
-# For Gemini models
-pip install google-generativeai
-
-# For Claude models
-pip install anthropic
-```
 
 ## 🔧 Configuration
 
-Set up API keys as environment variables:
-
 ```bash
-export OPENAI_API_KEY="your-openai-api-key"
-export GEMINI_API_KEY="your-gemini-api-key"
-export CLAUDE_API_KEY="your-claude-api-key"
+cp models.template.yaml models.yaml
+cp credentials.template.yaml credentials.yaml
 ```
 
-Or pass them directly when initializing:
+Then, edit the `models.yaml` and `credentials.yaml` files to add your LLM info and credentials. Via [LiteLLM](https://docs.litellm.ai/docs/providers), you could use almost all LLMs and providers, such as OpenAI, Google Gemini, Anthropic, Azure OpenAI, Amazon Bedrock, etc. It also supports running local models from Hugging Face.
 
-```python
-from sci_demo.generation import Generation
+Additionally, if you want to save the logs of the workflow via [Weave](https://wandb.ai/site/weave/), you should get a Weave API key.
 
-gen = Generation(
-    openai_api_key="your-openai-key",
-    gemini_api_key="your-gemini-key",
-    claude_api_key="your-claude-key"
-)
-```
 
 ## 🎯 Core Components
 
@@ -57,53 +40,34 @@ gen = Generation(
 
 Unified interface for text generation across multiple AI providers.
 
-#### Supported Models
-
-**OpenAI Models**
-- `gpt-4o` (latest multimodal model)
-- `gpt-4o-mini`
-- `gpt-4-turbo`
-- `gpt-4`
-- `gpt-3.5-turbo`
-
-**Google Gemini Models**
-- `gemini-1.5-pro`
-- `gemini-1.5-flash`
-- `gemini-1.0-pro`
-- `gemini-pro`
-
-**Anthropic Claude Models**
-- `claude-3-5-sonnet-20241022`
-- `claude-3-5-haiku-20241022`
-- `claude-3-opus-20240229`
-- `claude-3-sonnet-20240229`
-
-**Hugging Face Models**
-- Any compatible model from Hugging Face Hub
-
 #### Basic Usage
 
 ```python
+import weave
 from sci_demo.generation import Generation
+
+weave.init("my_research_project")  # the project name in Weave
 
 # Initialize with multiple providers
 gen = Generation(
-    openai_api_key="your-openai-key",
-    gemini_api_key="your-gemini-key",
-    claude_api_key="your-claude-key"
+    models_file: str = "models.yaml",
+    credentials_file: str = "credentials.yaml",
 )
 
 # Generate text with GPT-4o
 result = gen.generate(
     prompt="Explain quantum computing in simple terms",
-    model="gpt-4o",
+    model_name="openai/gpt-4o-2024-08-06",  # the model name in models.yaml
+    # Other optional arguments
     max_tokens=200,
     temperature=0.7
+    top_p=0.95,
 )
 
 print(f"Response: {result['text']}")
 print(f"Provider: {result['provider']}")
-print(f"Usage: {result['usage']}")
+print(f"Model: {result['model']}")
+print(f"Usage: {"None" if 'usage' not in result else result['usage']}")
 ```
 
 #### Async Batch Processing
@@ -120,7 +84,7 @@ async def batch_example():
     
     results = await gen.generate_batch_async(
         prompts=prompts,
-        model="gpt-4o",
+        model="openai/gpt-4o-2024-08-06",
         max_tokens=100
     )
     
@@ -219,7 +183,10 @@ Orchestrates multi-stage iterative processes with automatic history integration.
 #### Basic Workflow
 
 ```python
+import weave
 from sci_demo.workflow import Workflow
+
+weave.init("my_research_project")  # the project name in Weave
 
 workflow = Workflow(
     generator=gen,
@@ -269,7 +236,7 @@ dynamic_prompt = workflow.create_dynamic_prompt_function(
 result = workflow.run_sync(
     prompt=dynamic_prompt,
     reference="Expected explanation",
-    gen_args={"model": "gpt-4o", "max_tokens": 200}
+    gen_args={"model_name": "openai/gpt-4o-2024-08-06"}
 )
 ```
 
@@ -366,6 +333,9 @@ result = {
         "scores": [...],            # All evaluation scores
         "raw_outputs": [...],       # Full generation responses
         "iterations": [...]         # Iteration numbers
+        "generation_metadata": [],  # Track generation details
+        "evaluation_metadata": [],  # Track evaluation details
+        "timing_info": [],          # Track timing for each iteration
     },
     "total_iterations": 4,          # Number of iterations completed
     "final_scores": {...},          # Final iteration scores
@@ -385,6 +355,8 @@ result = {
 }
 ```
 
+You could also check the logs of the workflow in Weave UI.
+
 ## 📚 Examples
 
 ### Basic Multi-Provider Usage
@@ -393,19 +365,18 @@ result = {
 from sci_demo.generation import Generation
 
 gen = Generation(
-    openai_api_key="your-openai-key",
-    gemini_api_key="your-gemini-key",
-    claude_api_key="your-claude-key"
+    models_file="models.yaml",
+    credentials_file="credentials.yaml"
 )
 
 # Test different models
-models = ["gpt-4o", "gemini-1.5-pro", "claude-3-5-sonnet-20241022"]
+models = ["openai/gpt-4o-2024-08-06", "gemini/gemini-2.5-flash", "anthropic/claude-3-7-sonnet-20250219"]
 prompt = "Write a haiku about artificial intelligence"
 
 for model in models:
     result = gen.generate(
         prompt=prompt,
-        model=model,
+        model_name=model,
         max_tokens=100,
         temperature=0.8
     )
@@ -421,7 +392,10 @@ from sci_demo.workflow import Workflow
 from sci_demo.oracle import Oracle, improvement_rate_metric
 
 # Setup components
-gen = Generation(openai_api_key="your-key")
+gen = Generation(
+    models_file="models.yaml",
+    credentials_file="credentials.yaml"
+)
 oracle = Oracle()
 
 # Register metrics
@@ -464,7 +438,7 @@ dynamic_prompt = workflow.create_dynamic_prompt_function(
 result = workflow.run_sync(
     prompt=dynamic_prompt,
     reference="Quantum computing leverages quantum mechanics for computational advantages",
-    gen_args={"model": "gpt-4o", "max_tokens": 150, "temperature": 0.7},
+    gen_args={"model_name": "openai/gpt-4o-2024-08-06", "max_tokens": 150, "temperature": 0.7},
     history_context={"task_description": "Scientific summarization task"}
 )
 
@@ -534,34 +508,6 @@ logging.basicConfig(level=logging.DEBUG)
 
 # The workflow will now print detailed information about each iteration
 ```
-
-## 🚀 Getting Started
-
-1. **Install dependencies**:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-2. **Set up API keys**:
-   ```bash
-   export OPENAI_API_KEY="your-openai-key"
-   export GEMINI_API_KEY="your-gemini-key"
-   export CLAUDE_API_KEY="your-claude-key"
-   ```
-
-3. **Run basic example**:
-   ```python
-   from sci_demo.generation import Generation
-   
-   gen = Generation(openai_api_key="your-key")
-   result = gen.generate("Explain AI in simple terms", model="gpt-4o")
-   print(result['text'])
-   ```
-
-4. **Try advanced workflows**:
-   ```bash
-   python examples/history_workflow_examples.py
-   ```
 
 ## 🤝 Contributing
 

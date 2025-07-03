@@ -1,9 +1,9 @@
 # Core dependencies for Science Discovery Framework
 torch>=2.0.0
 transformers>=4.30.0
-openai>=1.0.0
 numpy>=1.21.0
 litellm>=1.73.6
+weave>=0.51.54
 
 # Optional dependencies for enhanced functionality
 scipy>=1.9.0
@@ -15,6 +15,7 @@ black>=22.0.0
 flake8>=5.0.0
 
 # Optional dependencies for additional model providers
+openai>=1.0.0
 google-generativeai>=0.3.0  # For Gemini models
 anthropic>=0.25.0           # For Claude models
 
