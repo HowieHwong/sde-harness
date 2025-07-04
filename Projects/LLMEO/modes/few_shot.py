@@ -8,6 +8,8 @@ import sys
 import os
 from typing import Any, Dict
 
+import weave
+
 # Add project root to Python path
 project_root = os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -39,11 +41,9 @@ def run_few_shot(args) -> Dict[str, Any]:
         Workflow execution result
     """
     print("🚀 Run Few-Shot learning mode...")
-
+    weave.init("few_shot_mode")
     # Setup components
-    generator = Generation(
-        openai_api_key=args.api_key or os.getenv("OPENAI_API_KEY"),
-    )
+    generator = Generation(max_workers=3)
 
     # Load data
     with open("data/1M-space_50-ligands-full.csv", "r") as fo:
@@ -75,10 +75,13 @@ def run_few_shot(args) -> Dict[str, Any]:
         current_round_tmc = find_tmc_in_space(
             reference, retrive_tmc_from_message(response, 10)
         )
-        if current_round_tmc is None or current_round_tmc.empty:
+        if current_round_tmc is None or current_round_tmc.empty or len(current_round_tmc) == 0:
             return 0
         else:
-            return current_round_tmc["gap"].nlargest(10).mean()
+            try:
+                return current_round_tmc["gap"].nlargest(10).mean()
+            except:
+                return 0
 
     oracle.register_metric("top10_avg_gap", top10_avg_gap)
 
@@ -87,14 +90,14 @@ def run_few_shot(args) -> Dict[str, Any]:
         generator=generator,
         oracle=oracle,
         max_iterations=args.iterations,
-        enable_multi_round_metrics=False,
+        enable_multi_round_metrics=False
     )
 
     # Run
     result = workflow.run_sync(
         prompt=prompt,
         reference=df_tmc,
-        gen_args={"max_tokens": args.max_tokens, "temperature": args.temperature},
+        gen_args={"model_name":args.model, "max_tokens": args.max_tokens, "temperature": args.temperature},
     )
 
     print(f"✅ Few-Shot mode completed! Final score: {result['final_scores']}")
@@ -119,7 +122,7 @@ if __name__ == "__main__":
     )
     parser.add_argument("--iterations", type=int, default=2, help="Iteration number")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
-
+    parser.add_argument("--model", type=str, default="deepseek/deepseek-chat", help="Choose From [openai/gpt-4o-2024-08-06, anthropic/claude-3-7-sonnet-20250219]")
     args = parser.parse_args()
     result = run_few_shot(args)
     print(f"Test completed: {result}")

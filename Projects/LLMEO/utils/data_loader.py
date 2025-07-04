@@ -123,15 +123,30 @@ def setup_oracle(
         def improvement_rate_metric(
             history: dict, reference: any, current_iteration: int, **kwargs
         ) -> float:
-            explored_tmc = history.setdefault("tmc_explorer", [tmc_samples])
+            # Initialize tmc_explorer with serializable format
+            if "tmc_explorer" not in history:
+                # Convert initial tmc_samples to serializable format
+                history["tmc_explorer"] = [tmc_samples.to_dict('records')]
+            
             current_round_tmc = find_tmc_in_space(
                 reference, retrive_tmc_from_message(history["outputs"][-1], 10)
             )
             if current_round_tmc is None or current_round_tmc.empty:
-                history["tmc_explorer"].append(pd.DataFrame())
+                history["tmc_explorer"].append([])
             else:
-                history["tmc_explorer"].append(current_round_tmc)
-            all_tmc = pd.concat(history["tmc_explorer"])
+                # Convert DataFrame to serializable format
+                history["tmc_explorer"].append(current_round_tmc.to_dict('records'))
+            
+            # Convert back to DataFrame for calculations
+            all_tmc_records = []
+            for tmc_list in history["tmc_explorer"]:
+                if tmc_list:  # Only add non-empty lists
+                    all_tmc_records.extend(tmc_list)
+            
+            if not all_tmc_records:
+                return 0.0
+            
+            all_tmc = pd.DataFrame(all_tmc_records)
             top10_avg_gap = all_tmc["gap"].nlargest(10).mean()
             return top10_avg_gap
 

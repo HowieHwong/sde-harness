@@ -8,6 +8,8 @@ import sys
 import os
 from typing import Any, Dict
 
+import weave
+
 # Add project root to Python path
 project_root = os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -41,10 +43,8 @@ def run_multi_prop(args) -> Dict[str, Any]:
     print("🔄 Run multi-property optimization mode...")
 
     # Setup components
-    generator = Generation(
-        openai_api_key=args.api_key or os.getenv("OPENAI_API_KEY"),
-    )
-
+    weave.init("LLMEO-multi_prop_mode")
+    generator = Generation(max_workers=1)
     # Load data
     with open("data/1M-space_50-ligands-full.csv", "r") as fo:
         df_ligands_str = fo.read()
@@ -77,15 +77,30 @@ def run_multi_prop(args) -> Dict[str, Any]:
     def improvement_rate_metric(
         history: dict, reference: any, current_iteration: int, **kwargs
     ) -> float:
-        explored_tmc = history.setdefault("tmc_explorer", [tmc_samples])
+        # Initialize tmc_explorer with serializable format
+        if "tmc_explorer" not in history:
+            # Convert initial tmc_samples to serializable format
+            history["tmc_explorer"] = [tmc_samples.to_dict('records')]
+        
         current_round_tmc = find_tmc_in_space(
             reference, retrive_tmc_from_message(history["outputs"][-1], 10)
         )
         if current_round_tmc is None or current_round_tmc.empty:
-            history["tmc_explorer"].append(pd.DataFrame())
+            history["tmc_explorer"].append([])
         else:
-            history["tmc_explorer"].append(current_round_tmc)
-        all_tmc = pd.concat(history["tmc_explorer"])
+            # Convert DataFrame to serializable format
+            history["tmc_explorer"].append(current_round_tmc.to_dict('records'))
+        
+        # Convert back to DataFrame for calculations
+        all_tmc_records = []
+        for tmc_list in history["tmc_explorer"]:
+            if tmc_list:  # Only add non-empty lists
+                all_tmc_records.extend(tmc_list)
+        
+        if not all_tmc_records:
+            return 0.0
+        
+        all_tmc = pd.DataFrame(all_tmc_records)
         all_tmc["score"] = all_tmc["gap"] * all_tmc["polarisability"]
         top10_avg_score = all_tmc["score"].nlargest(10).mean()
         return top10_avg_score
@@ -118,7 +133,7 @@ def run_multi_prop(args) -> Dict[str, Any]:
     result = workflow.run_sync(
         prompt=prompt_fn,
         reference=df_tmc,
-        gen_args={"max_tokens": args.max_tokens, "temperature": args.temperature},
+        gen_args={"model_name":args.model, "max_tokens": args.max_tokens, "temperature": args.temperature},
     )
 
     print(
@@ -147,7 +162,7 @@ if __name__ == "__main__":
     )
     parser.add_argument("--iterations", type=int, default=2, help="Iteration number")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
-
+    parser.add_argument("--model", type=str, default="deepseek/deepseek-chat", help="Choose From [openai/gpt-4o-2024-08-06, anthropic/claude-3-7-sonnet-20250219]")
     args = parser.parse_args()
     result = run_multi_prop(args)
-    print(f"Test completed: {result}")
+    print(f"Test completed! ")

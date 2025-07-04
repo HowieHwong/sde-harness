@@ -378,7 +378,7 @@ class Workflow(weave.Model):
             "method": evaluation_method,
             "metrics_used": current_metrics,
             "text_length": len(text),
-            "reference_length": len(str(reference)) if reference else 0
+            "reference_length": self._safe_get_length(reference)
         }
         
         return scores, evaluation_meta
@@ -513,6 +513,25 @@ class Workflow(weave.Model):
         mean_val = sum(values) / len(values)
         variance = sum((x - mean_val) ** 2 for x in values) / len(values)
         return variance ** 0.5
+    
+    def _safe_get_length(self, reference: Any) -> int:
+        """Safely get the length of reference object, handling DataFrames and other types."""
+        if reference is None:
+            return 0
+        
+        try:
+            # Handle pandas DataFrame
+            if hasattr(reference, 'empty') and hasattr(reference, 'shape'):
+                # This is likely a DataFrame
+                if reference.empty:
+                    return 0
+                return reference.shape[0]  # Return number of rows
+            
+            # Handle other types that support len()
+            return len(str(reference))
+        except (TypeError, AttributeError):
+            # If we can't get length, return 0
+            return 0
     
     @weave.op()
     def _analyze_best_iteration(self, history: Dict[str, List[Any]]) -> Dict[str, Any]:
