@@ -18,20 +18,20 @@ except ImportError:
     from __info__ import __version__
 
 
-class Workflow(weave.Model):
+def remove_inputs_from_weave_log(inputs: Dict[str, Any]) -> Dict[str, Any]:
+    """Remove inputs from weave log to avoid large serialization."""
+    for input_key in ('reference',):
+        if input_key in inputs:
+            inputs[input_key] = "[Omitted from logging]"
+    return inputs
+
+
+class Workflow:
     """
     A pipeline to orchestrate multi-stage science discovery powered by LLMs.
     Supports iterative generate-evaluate-feedback loops with dynamic prompts and metrics.
     Enhanced with history support for prompts and multi-round metrics.
     """
-    
-    # Model configuration attributes for Weave versioning
-    generator: Generation
-    oracle: Oracle
-    max_iterations: int = 3
-    stop_criteria: Optional[Callable[[Dict[str, Any]], bool]] = None
-    enable_history_in_prompts: bool = True
-    enable_multi_round_metrics: bool = True
     
     def __init__(
         self,
@@ -53,15 +53,13 @@ class Workflow(weave.Model):
             enable_history_in_prompts: Whether to automatically add history to prompts.
             enable_multi_round_metrics: Whether to use multi-round metrics when available.
         """
-        # Initialize the weave.Model with configuration
-        super().__init__(
-            generator=generator,
-            oracle=oracle,
-            max_iterations=max_iterations,
-            stop_criteria=stop_criteria,
-            enable_history_in_prompts=enable_history_in_prompts,
-            enable_multi_round_metrics=enable_multi_round_metrics
-        )
+        # Store configuration without calling super().__init__
+        self.generator = generator
+        self.oracle = oracle
+        self.max_iterations = max_iterations
+        self.stop_criteria = stop_criteria
+        self.enable_history_in_prompts = enable_history_in_prompts
+        self.enable_multi_round_metrics = enable_multi_round_metrics
         
         # Initialize workflow tracking metadata
         self._workflow_metadata = {
@@ -73,7 +71,7 @@ class Workflow(weave.Model):
             }
         }
 
-    @weave.op()
+    @weave.op(postprocess_inputs=remove_inputs_from_weave_log)
     async def run(
         self,
         prompt: Union[Prompt, Callable[[int, Dict[str, List[Any]]], Prompt]],
@@ -342,7 +340,7 @@ class Workflow(weave.Model):
         
         return current_metrics
     
-    @weave.op()
+    @weave.op(postprocess_inputs=remove_inputs_from_weave_log)
     async def _execute_evaluation(
         self,
         text: str,
