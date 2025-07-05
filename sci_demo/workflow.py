@@ -1,5 +1,6 @@
 import asyncio
 from typing import Any, Dict, List, Optional, Callable, Union
+from datetime import datetime
 
 import weave
 
@@ -71,7 +72,10 @@ class Workflow:
             }
         }
 
-    @weave.op(postprocess_inputs=remove_inputs_from_weave_log)
+    @weave.op(
+        postprocess_inputs=remove_inputs_from_weave_log,
+        call_display_name=lambda call: f"{call.func_name}__{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+    )
     async def run(
         self,
         prompt: Union[Prompt, Callable[[int, Dict[str, List[Any]]], Prompt]],
