@@ -10,18 +10,19 @@ This is a scientific discovery framework that supports multiple AI providers and
 Responsible for unified interface management with multiple AI providers
 
 #### Basic Configuration
+Setup your api key inside credentials.yaml, and models.yaml, and copy a file to your Project folder.
+
+```python
+# In your code, remeber to setup weave
+import weave
+weave.init("Project Name")
+```
+
 ```python
 from sci_demo.generation import Generation
+# Method 1: Using environment variables (For quick start, you don't exactally need to set any parameters.)
+generator = Generation()
 
-# Method 1: Using environment variables
-generator = Generation(
-    openai_api_key=os.getenv("OPENAI_API_KEY"),
-    gemini_api_key=os.getenv("GEMINI_API_KEY"),
-    claude_api_key=os.getenv("CLAUDE_API_KEY")
-)
-
-# Method 2: Direct API key input
-generator = Generation(openai_api_key="your-api-key-here")
 ```
 
 ### 2. Prompt (Prompt Management)
