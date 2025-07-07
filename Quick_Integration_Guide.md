@@ -10,28 +10,30 @@ This is a scientific discovery framework that supports multiple AI providers and
 Responsible for unified interface management with multiple AI providers
 
 #### Basic Configuration
+Setup your api key inside credentials.yaml, and models.yaml, and copy a file to your Project folder.
+
 ```python
-from sci_demo.generation import Generation
-
-# Method 1: Using environment variables
-generator = Generation(
-    openai_api_key=os.getenv("OPENAI_API_KEY"),
-    gemini_api_key=os.getenv("GEMINI_API_KEY"),
-    claude_api_key=os.getenv("CLAUDE_API_KEY")
-)
-
-# Method 2: Direct API key input
-generator = Generation(openai_api_key="your-api-key-here")
+# In your code, remember to setup weave
+import weave
+weave.init("Project Name")
 ```
 
+```python
+from sci_demo.generation import Generation
+# Retrive Models and Credentials from default yaml path (For quick start, you don't exactly need to set any parameters.)
+generator = Generation()
+
+```
+Certain LLM providers might require extra generation config parameter when you calling the llm. To cope with this, you can either edit the models.yaml file or pass it in during workflow.run_sync() gen_arg parameter. 
+
 ### 2. Prompt (Prompt Management)
-Supports history-aware dynamic prompt management
+
 
 #### Static Prompts (For fewshot experiment)
 ```python
 from sci_demo.prompt import Prompt
-# Give your {variable name} inside custom_template
-# Give your varibale key-value pair dictionary inside default_vars 
+# Include your {variable name} in the custom_template.
+# Provide your variable key-value pairs in the default_vars dictionary 
 prompt = Prompt(
     custom_template="Your prompt template: {task_description}\nData: {input_data}",
     default_vars={
@@ -41,11 +43,14 @@ prompt = Prompt(
 )
 ```
 
+
+
 #### Dynamic Prompts (For iterative workflows)
+This module supports history-aware dynamic prompt management.
 ```python
 def dynamic_prompt_fn(iteration, history):
     """Adjust prompts based on iteration count and history"""
-    #Set your first iteration (base) pprompt
+    #Define your first iteration (base) prompt
     base_prompt = Prompt(
         template_name="Predefined Prompt Tamplate",
         default_vars={
@@ -60,7 +65,7 @@ def dynamic_prompt_fn(iteration, history):
         previous_outputs = history.get("outputs", [])
         previous_scores = history.get("scores", [])
 
-        # Do whatever operation you need for those varible 
+        # Perform any necessary operations on these variables
         # TODO
         
         # Update prompt variables
@@ -74,7 +79,7 @@ def dynamic_prompt_fn(iteration, history):
 ```
 
 ### 3. Oracle (Evaluator)
-Supports single-round and multi-round evaluation metrics
+This module supports single-round and multi-round evaluation metrics.
 
 #### Register Evaluation Metrics
 ```python
@@ -98,9 +103,9 @@ def trend_analysis_metric(history, reference, current_iteration, **kwargs):
     outputs = history.get("outputs", [])
     scores = history.get("scores", [])
     
-    # Analyze trends:  we can do calculation here with access to all the past LLM output, inside history
+    # Analyze trends by performing calculations using the past LLM outputs available in the 'history' parameter."
     
-    # You Can update custom data in history for simplisity and efficiency
+    # You can update custom data in history for simplicity and efficiency
     history.setdefault("custom_data", []).append(trend_score)
     
     return trend_score
@@ -126,8 +131,8 @@ workflow = Workflow(
 result = workflow.run_sync(
     prompt=your_prompt_or_prompt_function,
     reference=your_reference_data,
-    gen_args={"model": "gpt-4o", "max_tokens": 1000, "temperature": 0.7}
+    gen_args={"model": {model_name_from_models.yaml}}, "max_tokens": 1000, "temperature": 0.7...}
+
 )
 ```
-
-For other advance usage, you are more than welcome to read through other DOC and code example inside this repo.
+For advanced usage, refer to the additional documentation and code examples in this repository.
