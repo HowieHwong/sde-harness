@@ -97,28 +97,8 @@ def run_few_shot(args) -> Dict[str, Any]:
     result = workflow.run_sync(
         prompt=prompt,
         reference=df_tmc,
-        gen_args={"model_name":args.model, "max_tokens": args.max_tokens},
+        gen_args={"model_name":args.model, "temperature": args.temperature, "max_tokens": args.max_tokens},
     )
 
     print(f"✅ Few-Shot mode completed! Final score: {result['final_scores']}")
     return result
-
-
-if __name__ == "__main__":
-    # Test mode
-    import argparse
-
-    parser = argparse.ArgumentParser(description="Few-Shot learning mode test")
-    parser.add_argument("--samples", type=int, default=10, help="Initial sample number")
-    parser.add_argument(
-        "--num-samples", type=int, default=10, help="Generated sample number"
-    )
-    parser.add_argument(
-        "--max-tokens", type=int, default=5000, help="Maximum token number"
-    )
-    parser.add_argument("--iterations", type=int, default=2, help="Iteration number")
-    parser.add_argument("--seed", type=int, default=42, help="Random seed")
-    parser.add_argument("--model", type=str, default="deepseek/deepseek-chat", help="Choose From [openai/gpt-4o-2024-08-06, anthropic/claude-3-7-sonnet-20250219]")
-    args = parser.parse_args()
-    result = run_few_shot(args)
-    print(f"Test completed: {result}")

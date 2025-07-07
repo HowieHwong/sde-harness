@@ -43,7 +43,7 @@ def run_single_prop(args) -> Dict[str, Any]:
     print("🎯 Run single property optimization mode...")
     weave.init("LLMEO-single-prop")
     # Setup components
-    generator = Generation()
+    generator = Generation(models_file=project_root + "/models.yaml", credentials_file=project_root + "/credentials.yaml")
 
     # Load data
     with open("data/1M-space_50-ligands-full.csv", "r") as fo:
@@ -132,27 +132,3 @@ def run_single_prop(args) -> Dict[str, Any]:
 
     print(f"✅ Single property optimization completed! Score: {result['final_scores']}")
     return result
-
-
-if __name__ == "__main__":
-    # Test mode
-    import argparse
-
-    parser = argparse.ArgumentParser(
-        description="Single property optimization mode test"
-    )
-    parser.add_argument("--api-key", type=str, help="OpenAI API key")
-    parser.add_argument("--samples", type=int, default=10, help="Initial sample number")
-    parser.add_argument(
-        "--num-samples", type=int, default=10, help="Generated sample number"
-    )
-    parser.add_argument(
-        "--max-tokens", type=int, default=5000, help="Maximum token number"
-    )
-
-    parser.add_argument("--seed", type=int, default=42, help="Random seed")
-    parser.add_argument("--model", type=str, default="deepseek/deepseek-chat", help="Choose From [openai/gpt-4o-2024-08-06, anthropic/claude-3-7-sonnet-20250219]")
-    parser.add_argument("--iterations", type=int, default=3, help="Iteration number")
-    args = parser.parse_args()
-    result = run_single_prop(args)
-    print(f"Test completed! ")
