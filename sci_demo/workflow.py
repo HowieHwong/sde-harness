@@ -357,7 +357,7 @@ class Workflow:
         evaluation_start_time = asyncio.get_event_loop().time()
         
         # Choose evaluation method based on iteration and settings
-        if self.enable_multi_round_metrics and iteration > 1:
+        if self.enable_multi_round_metrics:
             scores = self.oracle.compute_with_history(
                 text, reference, history, iteration, current_metrics
             )

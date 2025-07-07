@@ -63,13 +63,6 @@ Example usage:
         help="Multi-property optimization mode - Multi-round optimization of multiple properties",
     )
 
-    # DIY generation mode
-    # diy_gen_parser = subparsers.add_parser(
-    #     'diy-gen',
-    #     parents=[common_args],
-    #     help='DIY generation mode - Custom generation parameters'
-    # )
-
     # Parse arguments
     args = parser.parse_args()
 
@@ -80,12 +73,6 @@ Example usage:
 
     # Validate data files
     if not validate_data_files():
-        sys.exit(1)
-
-    # Validate configuration
-    config = get_default_config()
-    if not validate_config(config):
-        print("❌ Configuration validation failed")
         sys.exit(1)
 
     # Run corresponding mode
