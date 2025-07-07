@@ -61,3 +61,8 @@ bedrock/us.deepseek.r1-v1:0:
   provider: bedrock
   model: us.deepseek.r1-v1:0
   credentials: bedrock
+  
+deepseek/deepseek-chat:
+  provider: deepseek
+  model: deepseek-chat
+  credentials: deepseek

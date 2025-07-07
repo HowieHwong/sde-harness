@@ -8,6 +8,8 @@ import sys
 import os
 from typing import Any, Dict
 
+import weave
+
 # Add project root to Python path
 project_root = os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -39,11 +41,9 @@ def run_single_prop(args) -> Dict[str, Any]:
         Workflow execution result
     """
     print("🎯 Run single property optimization mode...")
-
+    weave.init("LLMEO-single-prop")
     # Setup components
-    generator = Generation(
-        openai_api_key=args.api_key or os.getenv("OPENAI_API_KEY"),
-    )
+    generator = Generation(models_file=project_root + "/models.yaml", credentials_file=project_root + "/credentials.yaml")
 
     # Load data
     with open("data/1M-space_50-ligands-full.csv", "r") as fo:
@@ -67,23 +67,38 @@ def run_single_prop(args) -> Dict[str, Any]:
             "NUM_SAMPLES": args.num_samples,
         },
     )
-    print(prompt.build())
+    # print(prompt.build())
     # Setup evaluator
     oracle = Oracle()
 
     def improvement_rate_metric(
         history: dict, reference: any, current_iteration: int, **kwargs
     ) -> float:
-        explored_tmc = history.setdefault("tmc_explorer", [tmc_samples])
+        # Initialize tmc_explorer with serializable format
+        if "tmc_explorer" not in history:
+            # Convert initial tmc_samples to serializable format
+            history["tmc_explorer"] = [tmc_samples.to_dict('records')]
+        
         current_round_tmc = find_tmc_in_space(
             reference, retrive_tmc_from_message(history["outputs"][-1], 10)
         )
         if current_round_tmc is None or current_round_tmc.empty:
             print("No new TMC found")
-            history["tmc_explorer"].append(pd.DataFrame())
+            history["tmc_explorer"].append([])
         else:
-            history["tmc_explorer"].append(current_round_tmc)
-        all_tmc = pd.concat(history["tmc_explorer"])
+            # Convert DataFrame to serializable format
+            history["tmc_explorer"].append(current_round_tmc.to_dict('records'))
+        
+        # Convert back to DataFrame for calculations
+        all_tmc_records = []
+        for tmc_list in history["tmc_explorer"]:
+            if tmc_list:  # Only add non-empty lists
+                all_tmc_records.extend(tmc_list)
+        
+        if not all_tmc_records:
+            return 0.0
+        
+        all_tmc = pd.DataFrame(all_tmc_records)
         top10_avg_gap = all_tmc["gap"].nlargest(10).mean()
         return top10_avg_gap
 
@@ -105,40 +120,15 @@ def run_single_prop(args) -> Dict[str, Any]:
     workflow = Workflow(
         generator=generator,
         oracle=oracle,
-        max_iterations=3,
+        max_iterations=args.iterations,
         enable_multi_round_metrics=True,
     )
 
     result = workflow.run_sync(
         prompt=prompt_fn,
         reference=df_tmc,
-        gen_args={"max_tokens": args.max_tokens, "temperature": args.temperature},
+        gen_args={"model_name": args.model, "max_tokens": args.max_tokens, "temperature": args.temperature},
     )
 
     print(f"✅ Single property optimization completed! Score: {result['final_scores']}")
     return result
-
-
-if __name__ == "__main__":
-    # Test mode
-    import argparse
-
-    parser = argparse.ArgumentParser(
-        description="Single property optimization mode test"
-    )
-    parser.add_argument("--api-key", type=str, help="OpenAI API key")
-    parser.add_argument("--samples", type=int, default=10, help="Initial sample number")
-    parser.add_argument(
-        "--num-samples", type=int, default=10, help="Generated sample number"
-    )
-    parser.add_argument(
-        "--max-tokens", type=int, default=5000, help="Maximum token number"
-    )
-    parser.add_argument(
-        "--temperature", type=float, default=0.0, help="Temperature parameter"
-    )
-    parser.add_argument("--seed", type=int, default=42, help="Random seed")
-
-    args = parser.parse_args()
-    result = run_single_prop(args)
-    print(f"Test completed: {result}")
