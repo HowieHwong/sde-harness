@@ -34,54 +34,55 @@ def make_text_for_existing_tmcs(
 
     return "\n".join(lines)
 
-
 def retrive_tmc_from_message(message: str, expected_returns: int = 1) -> List[str]:
     """
     Extract TMC strings from LLM response message.
-
+    
     Args:
         message: Response message from LLM
         expected_returns: Expected number of TMCs to extract
-
+        
     Returns:
         List of extracted TMC strings
     """
     # TMC pattern matching regex
     pattern = r"Pd_(\w{6})-subgraph-(\d+)_(\w{6})-subgraph-(\d+)_(\w{6})-subgraph-(\d+)_(\w{6})-subgraph-(\d+)"
-
+    
     # Possible delimiters for TMC in message
-    delimiters = ["*TMC*", "<<<TMC>>>:", "<TMC>", "TMC:", " TMC"]
-
+    delimiters = [
+        "*TMC*", "<<<TMC>>>:", "<TMC>", "TMC:", " TMC"
+    ]
+    
     # Try to split message using different delimiters
     message_parts = None
     for delimiter in delimiters:
         if delimiter in message:
             message_parts = message.split(delimiter)
             break
-
+            
     if message_parts is None:
         print("Unidentified pattern for splitting the LLM message.")
         return []
-
+    for i in range(len(message_parts)):
+        print(message_parts[i])
     # Extract TMCs
     tmcs = []
     for i in range(expected_returns):
         try:
             idx = -expected_returns + i
             match = re.search(pattern, message_parts[idx])
-
+            
             if match:
                 tmc = match.group()
                 if len(tmc.split("_")) == 5:  # Validate TMC format
                     tmcs.append(tmc)
                 else:
                     print(f"Invalid TMC format: {tmc}")
-
+                    
         except IndexError:
             continue
-
+            
     return tmcs
-
 
 def find_tmc_in_space(df: pd.DataFrame, tmcs: List[str]) -> Optional[pd.DataFrame]:
     """

@@ -154,6 +154,9 @@ class Workflow:
             )
             
             built_prompt = current_prompt.build()
+            print("Prompt: =================================")
+            print(built_prompt)
+            print("=========================================")
             history["prompts"].append(built_prompt)
             history["iterations"].append(iteration)
             
@@ -165,6 +168,9 @@ class Workflow:
             output, generation_meta = await self._execute_generation(
                 built_prompt, gen_args, iteration
             )
+            print("Output: =================================")
+            print(output)
+            print("=========================================")
             
             # Store generation results
             history["raw_outputs"].append(output)

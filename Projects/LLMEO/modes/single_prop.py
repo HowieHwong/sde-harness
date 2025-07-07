@@ -106,9 +106,14 @@ def run_single_prop(args) -> Dict[str, Any]:
 
     def prompt_fn(iteration, history):
         if iteration > 1:
+            print("=========================================")
+            print(history["outputs"][-1])
             new_tmc = retrive_tmc_from_message(history["outputs"][-1], 10)
             new_tmc_df = find_tmc_in_space(df_tmc, new_tmc)
+            print("=========================================")
+            print(new_tmc_df)
             if new_tmc_df is None or new_tmc_df.empty:
+                print("No new TMC found")
                 return prompt
             new_tmc_text = make_text_for_existing_tmcs(new_tmc_df, LIG_CHARGE, ["gap"])
             updated_current_samples = (
