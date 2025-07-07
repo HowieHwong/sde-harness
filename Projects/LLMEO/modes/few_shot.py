@@ -43,7 +43,7 @@ def run_few_shot(args) -> Dict[str, Any]:
     print("🚀 Run Few-Shot learning mode...")
     weave.init("few_shot_mode")
     # Setup components
-    generator = Generation(max_workers=3)
+    generator = Generation(models_file=project_root + "/models.yaml", credentials_file=project_root + "/credentials.yaml")
 
     # Load data
     with open("data/1M-space_50-ligands-full.csv", "r") as fo:
@@ -97,7 +97,7 @@ def run_few_shot(args) -> Dict[str, Any]:
     result = workflow.run_sync(
         prompt=prompt,
         reference=df_tmc,
-        gen_args={"model_name":args.model, "max_tokens": args.max_tokens, "temperature": args.temperature},
+        gen_args={"model_name":args.model, "max_tokens": args.max_tokens},
     )
 
     print(f"✅ Few-Shot mode completed! Final score: {result['final_scores']}")
@@ -109,16 +109,12 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description="Few-Shot learning mode test")
-    parser.add_argument("--api-key", type=str, help="OpenAI API key")
     parser.add_argument("--samples", type=int, default=10, help="Initial sample number")
     parser.add_argument(
         "--num-samples", type=int, default=10, help="Generated sample number"
     )
     parser.add_argument(
         "--max-tokens", type=int, default=5000, help="Maximum token number"
-    )
-    parser.add_argument(
-        "--temperature", type=float, default=0.0, help="Temperature parameter"
     )
     parser.add_argument("--iterations", type=int, default=2, help="Iteration number")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")

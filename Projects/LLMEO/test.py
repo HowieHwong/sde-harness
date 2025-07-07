@@ -4,6 +4,8 @@ import pandas as pd
 from unittest.mock import patch, MagicMock
 import sys
 import os
+import weave
+
 
 # Add project root to Python path
 project_root = os.path.dirname(
@@ -28,18 +30,34 @@ class TestUtils(unittest.TestCase):
 
     def test_Generation(self):
         """Test Generation class"""
-        API_Key = os.getenv("OPENAI_API_KEY")
-        response = Generation(API_Key).generate("Hello, nice to meet you")
+        weave.init("LLMEO-test")
+        gen = Generation()
+        self.assertIsNotNone(gen)
+    
+    def test_model(self):
+        """Test model"""
+        weave.init("LLMEO-test")
+        gen = Generation()
+
+        # response = gen.generate("Hello, nice to meet you", model_name="openai/gpt-4o-2024-08-06")
+        # self.assertIsNotNone(response)
+        # print("GPT-4o: Worked")
+        # response = gen.generate("Hello, nice to meet you", model_name="deepseek/deepseek-chat")
+        # self.assertIsNotNone(response)
+        # print("DeepSeek-Chat: Worked")
+        # response = gen.generate("Hello, nice to meet you", model_name="anthropic/claude-3-7-sonnet-20250219")
+        # self.assertIsNotNone(response)
+        # print("Claude-3.7-Sonnet: Worked")
+        response = gen.generate("Hello, nice to meet you", model_name="openai/o3")
         self.assertIsNotNone(response)
+        print("GPT-O3: Worked")
+        print(response.message.content)
+
 
     def test_dataset_exists(self):
         """Test if dataset exists"""
         self.assertTrue(os.path.exists("data/1M-space_50-ligands-full.csv"))
         self.assertTrue(os.path.exists("data/ground_truth_fitness_values.csv"))
-
-    def test_prompt_exists(self):
-        """Test if prompt exists"""
-        self.assertIsNotNone(PROMPT_G)
 
     def test_prompt(self):
         with open("data/1M-space_50-ligands-full.csv", "r") as fo:

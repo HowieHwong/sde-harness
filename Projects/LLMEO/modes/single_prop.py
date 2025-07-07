@@ -149,9 +149,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--max-tokens", type=int, default=5000, help="Maximum token number"
     )
-    parser.add_argument(
-        "--temperature", type=float, default=0.0, help="Temperature parameter"
-    )
+
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     parser.add_argument("--model", type=str, default="deepseek/deepseek-chat", help="Choose From [openai/gpt-4o-2024-08-06, anthropic/claude-3-7-sonnet-20250219]")
     parser.add_argument("--iterations", type=int, default=3, help="Iteration number")
