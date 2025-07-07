@@ -4,8 +4,6 @@ with history support and multi-round metrics.
 """
 
 import asyncio
-import os
-import sys
 from sci_demo.generation import Generation
 from sci_demo.workflow import Workflow
 from sci_demo.oracle import Oracle, improvement_rate_metric, consistency_metric, convergence_metric
@@ -16,9 +14,8 @@ def setup_components():
     """Setup the basic components for the examples."""
     # Initialize generation with multiple providers
     gen = Generation(
-        openai_api_key=os.getenv("OPENAI_API_KEY"),
-        gemini_api_key=os.getenv("GEMINI_API_KEY"),
-        claude_api_key=os.getenv("CLAUDE_API_KEY"),
+        models_file="models.yaml",
+        credentials_file="credentials.yaml"
     )
     
     # Setup oracle with both single-round and multi-round metrics
@@ -97,7 +94,7 @@ def example_1_basic_history_prompt():
     result = workflow.run_sync(
         prompt=prompt,
         reference="Quantum computing leverages quantum mechanics for computational advantages in specific problems",
-        gen_args={"model": "gpt-4o", "max_tokens": 100, "temperature": 0.7},
+        gen_args={"model_name": "openai/gpt-4o-2024-08-06", "max_tokens": 100, "temperature": 0.7},
         history_context={"task_description": "Scientific summarization with iterative improvement"}
     )
     
@@ -160,7 +157,7 @@ def example_2_dynamic_prompts():
     result = workflow.run_sync(
         prompt=dynamic_prompt,
         reference="Machine learning enables computers to learn and improve from data without explicit programming",
-        gen_args={"model": "gpt-4o", "max_tokens": 150, "temperature": 0.6},
+        gen_args={"model_name": "openai/gpt-4o-2024-08-06", "max_tokens": 150, "temperature": 0.6},
         history_context={"task_description": "Educational explanation with progressive enhancement"}
     )
     
@@ -230,7 +227,7 @@ def example_3_conversation_style():
     result = workflow.run_sync(
         prompt=conversation_prompt_fn,
         reference="Photosynthesis is how plants make food from sunlight, water, and carbon dioxide",
-        gen_args={"model": "gpt-4o", "max_tokens": 120, "temperature": 0.8},
+        gen_args={"model_name": "openai/gpt-4o-2024-08-06", "max_tokens": 120, "temperature": 0.8},
         history_context={"task_description": "Educational conversation about photosynthesis"}
     )
     
@@ -304,7 +301,7 @@ def example_4_multi_round_metrics_analysis():
     result = workflow.run_sync(
         prompt=variation_prompt_fn,
         reference="A futuristic city with sustainable technology and harmonious human-AI coexistence",
-        gen_args={"model": "gpt-4o", "max_tokens": 100, "temperature": 0.9},  # Higher temperature for creativity
+        gen_args={"model_name": "openai/gpt-4o-2024-08-06", "max_tokens": 100, "temperature": 0.9},  # Higher temperature for creativity
         history_context={"task_description": "Creative writing with variation"}
     )
     
@@ -350,7 +347,7 @@ async def example_5_async_workflow():
     result = await workflow.run(
         prompt=prompt,
         reference="Renewable energy provides clean, sustainable power while reducing environmental impact",
-        gen_args={"model": "gpt-4o", "max_tokens": 80, "temperature": 0.7},
+        gen_args={"model_name": "openai/gpt-4o-2024-08-06", "max_tokens": 80, "temperature": 0.7},
         history_context={"task_description": "Renewable energy summarization"}
     )
     
@@ -361,14 +358,6 @@ async def example_5_async_workflow():
 def main():
     """Run all examples."""
     print("=== History-Enhanced Workflow Examples ===\n")
-    
-    # Check API key availability
-    if not any([os.getenv("OPENAI_API_KEY"), os.getenv("GEMINI_API_KEY"), os.getenv("CLAUDE_API_KEY")]):
-        print("No API keys found. Please set at least one of:")
-        print("  export OPENAI_API_KEY='your-openai-key'")
-        print("  export GEMINI_API_KEY='your-gemini-key'")
-        print("  export CLAUDE_API_KEY='your-claude-key'")
-        sys.exit(1)
     
     try:
         # Run synchronous examples

@@ -1,42 +1,107 @@
-import os
-from typing import Optional, Union, Dict, Any, List
-from enum import Enum
 import asyncio
-from concurrent.futures import ThreadPoolExecutor
+import threading
+from typing import Any, Dict, List, Optional, Union
+import yaml
+from copy import deepcopy
+import gc
+
+import weave
 
 # API clients
-import openai
-from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
+from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
 import torch
-
-# Optional imports for additional APIs
-try:
-    import google.generativeai as genai
-    GEMINI_AVAILABLE = True
-except ImportError:
-    GEMINI_AVAILABLE = False
-
-try:
-    import anthropic
-    CLAUDE_AVAILABLE = True
-except ImportError:
-    CLAUDE_AVAILABLE = False
+import litellm
 
 
-class ModelProvider(Enum):
-    OPENAI = "openai"
-    GEMINI = "gemini"
-    CLAUDE = "claude"
-    HUGGINGFACE = "huggingface"
+def load_models_and_credentials(models_file="models.yaml", credentials_file="credentials.yaml"):
+    """Load configuration files with proper error handling."""
+    try:
+        with open(models_file, "r") as f:
+            models = yaml.safe_load(f)
+        if models is None:
+            raise ValueError(f"Models file {models_file} is empty or invalid")
+    except FileNotFoundError:
+        raise FileNotFoundError(f"Models configuration file not found: {models_file}")
+    except yaml.YAMLError as e:
+        raise ValueError(f"Invalid YAML in models file {models_file}: {e}")
+    
+    try:
+        with open(credentials_file, "r") as f:
+            credentials = yaml.safe_load(f)
+        if credentials is None:
+            credentials = {}  # Allow empty credentials file
+    except FileNotFoundError:
+        raise FileNotFoundError(f"Credentials configuration file not found: {credentials_file}")
+    except yaml.YAMLError as e:
+        raise ValueError(f"Invalid YAML in credentials file {credentials_file}: {e}")
+    
+    return models, credentials
+
+
+def load_model_config(model_name, models, credentials):
+    try:
+        model_config = deepcopy(models[model_name])
+    except KeyError:
+        raise KeyError(f"Model `{model_name}` not found in models_file")
+    
+    credentials_config = {}
+    if 'credentials' in model_config:
+        credentials_tag = model_config["credentials"]
+        if credentials_tag is not None:
+            try:
+                credentials_config = credentials[credentials_tag]
+            except KeyError:
+                raise KeyError(f"Credentials `{credentials_tag}` not found in credentials_file")
+    
+    model_config["model_name"] = model_name
+    model_config["credentials"] = credentials_config
+
+    return model_config
+
+
+def validate_device(device):
+    """
+    Validate and return the appropriate device configuration.
+    
+    Args:
+        device: Device specification (str or int or None)
+        
+    Returns:
+        str: Valid device string
+    """
+    if device is None:
+        if torch.cuda.is_available():
+            return "cuda"
+        else:
+            return "cpu"
+    elif isinstance(device, int):
+        if torch.cuda.is_available() and device < torch.cuda.device_count():
+            return f"cuda:{device}"
+        else:
+            return "cpu"
+    elif isinstance(device, str):
+        if device.startswith("cuda"):
+            if torch.cuda.is_available():
+                return device
+            else:
+                print(f"Warning: CUDA requested but not available, falling back to CPU")
+                return "cpu"
+        return device
+    else:
+        raise ValueError(f"Invalid device specification: {device}")
 
 
 class Generation:
+    """
+    A unified generator supporting OpenAI (GPT-4o, GPT-4, etc.), Google Gemini, 
+    Anthropic Claude, and Hugging Face models with optional concurrency.
+    """
+    
     def __init__(
         self,
-        openai_api_key: Optional[str] = None,
-        gemini_api_key: Optional[str] = None,
-        claude_api_key: Optional[str] = None,
-        hf_model_name: Optional[str] = None,
+        models_file: str = "models.yaml",
+        credentials_file: str = "credentials.yaml",
+        model_name: Optional[str] = None,
         device: Optional[Union[str, int]] = None,
         max_workers: int = 4,
     ):
@@ -45,92 +110,98 @@ class Generation:
         Anthropic Claude, and Hugging Face models with optional concurrency.
 
         Args:
-            openai_api_key: OpenAI API key. If provided, enables OpenAI models.
-            gemini_api_key: Google Gemini API key. If provided, enables Gemini models.
-            claude_api_key: Anthropic Claude API key. If provided, enables Claude models.
-            hf_model_name: Hugging Face model identifier (e.g., "meta-llama/Llama-3-7B").
+            models_file: Path to the models configuration file.
+            credentials_file: Path to the credentials configuration file.
             device: Device identifier for HF models (e.g., "cuda" or 0). If None, will auto-detect.
             max_workers: Number of threads for concurrent generation.
         """
-        
-        # Setup OpenAI
-        self.openai_client = None
-        if openai_api_key or os.getenv("OPENAI_API_KEY"):
-            self.openai_client = openai.OpenAI(
-                api_key=openai_api_key or os.getenv("OPENAI_API_KEY")
-            )
 
-        # Setup Gemini
-        self.gemini_client = None
-        if GEMINI_AVAILABLE and (gemini_api_key or os.getenv("GEMINI_API_KEY")):
-            genai.configure(api_key=gemini_api_key or os.getenv("GEMINI_API_KEY"))
-            self.gemini_client = genai
+        self.models, self.credentials = load_models_and_credentials(models_file, credentials_file)
 
-        # Setup Claude
-        self.claude_client = None
-        if CLAUDE_AVAILABLE and (claude_api_key or os.getenv("CLAUDE_API_KEY")):
-            self.claude_client = anthropic.Anthropic(
-                api_key=claude_api_key or os.getenv("CLAUDE_API_KEY")
-            )
+        self.model_name = model_name
+        self.device = validate_device(device)
 
         # Setup HF
+        self.hf_model_name = None
         self.hf_model = None
         self.hf_tokenizer = None
         self.generator = None
-        if hf_model_name:
-            self.hf_model = AutoModelForCausalLM.from_pretrained(hf_model_name)
-            self.hf_tokenizer = AutoTokenizer.from_pretrained(hf_model_name)
-            # move model to appropriate device
-            if device is None:
-                self.device = "cuda" if torch.cuda.is_available() else "cpu"
-            else:
-                self.device = device
-            self.hf_model.to(self.device)
-            self.generator = pipeline(
-                "text-generation",
-                model=self.hf_model,
-                tokenizer=self.hf_tokenizer,
-                device=0 if isinstance(self.device, int) or self.device == "cuda" else -1,
-            )
+        self._model_lock = threading.Lock()  # Thread safety for model loading
 
-        # Thread pool for concurrency
-        self.executor = ThreadPoolExecutor(max_workers=max_workers)
+        # Thread pool for concurrency - use weave.ThreadPoolExecutor for proper context
+        self.executor = weave.ThreadPoolExecutor(max_workers=max_workers)
+        self._closed = False
 
-        # Model mappings
-        self.openai_models = {
-            "gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-4", "gpt-3.5-turbo",
-            "gpt-4-turbo-preview", "gpt-4-0125-preview", "gpt-4-1106-preview"
-        }
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+
+    def close(self):
+        """Clean up resources."""
+        if not self._closed:
+            self.executor.shutdown(wait=True)
+            self._cleanup_hf_model()
+            self._closed = True
+
+    def __del__(self):
+        if hasattr(self, '_closed') and not self._closed:
+            self.close()
+
+    def _cleanup_hf_model(self):
+        """Clean up HuggingFace model resources."""
+        if self.hf_model is not None:
+            del self.hf_model
+            self.hf_model = None
+        if self.hf_tokenizer is not None:
+            del self.hf_tokenizer
+            self.hf_tokenizer = None
+        if self.generator is not None:
+            del self.generator
+            self.generator = None
+        self.hf_model_name = None
         
-        self.gemini_models = {
-            "gemini-1.5-pro", "gemini-1.5-flash", "gemini-1.0-pro", 
-            "gemini-pro", "gemini-pro-vision"
-        }
-        
-        self.claude_models = {
-            "claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022",
-            "claude-3-opus-20240229", "claude-3-sonnet-20240229", 
-            "claude-3-haiku-20240307", "claude-2.1", "claude-2.0"
-        }
+        # Force garbage collection to free GPU memory
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        gc.collect()
 
-    def _get_provider(self, model: str) -> ModelProvider:
-        """Determine the provider based on model name."""
-        if model in self.openai_models:
-            return ModelProvider.OPENAI
-        elif model in self.gemini_models:
-            return ModelProvider.GEMINI
-        elif model in self.claude_models:
-            return ModelProvider.CLAUDE
-        else:
-            return ModelProvider.HUGGINGFACE
+    def _load_hf_model_and_tokenizer(self, model_name):
+        """Load HuggingFace model with proper error handling and cleanup."""
+        with self._model_lock:  # Thread safety
+            if self.hf_model_name == model_name and self.hf_model is not None:
+                return  # Model already loaded
+            
+            # Clean up previous model
+            self._cleanup_hf_model()
+            
+            try:
+                self.hf_model_name = model_name
+                self.hf_model = AutoModelForCausalLM.from_pretrained(model_name)
+                self.hf_model.to(self.device)
+                self.hf_tokenizer = AutoTokenizer.from_pretrained(model_name)
+                
+                # Set pad_token if not exists
+                if self.hf_tokenizer.pad_token is None:
+                    self.hf_tokenizer.pad_token = self.hf_tokenizer.eos_token
+                
+                self.generator = pipeline(
+                    "text-generation",
+                    model=self.hf_model,
+                    tokenizer=self.hf_tokenizer,
+                    device=0 if isinstance(self.device, int) or self.device == "cuda" else -1,
+                )
+            except Exception as e:
+                self._cleanup_hf_model()
+                raise RuntimeError(f"Failed to load HuggingFace model {model_name}: {e}")
 
+    @weave.op()
     def generate(
         self,
-        prompt: str,
-        model: str = "gpt-4o",
-        max_tokens: int = 256,
-        temperature: float = 0.7,
-        top_p: float = 1.0,
+        prompt: Optional[str] = None,
+        messages: Optional[List[Dict[str, str]]] = None,
+        model_name: Optional[str] = None,
         **kwargs,
     ) -> Dict[str, Any]:
         """
@@ -138,53 +209,163 @@ class Generation:
 
         Args:
             prompt: Input prompt string.
-            model: Model identifier (e.g., "gpt-4o", "gemini-1.5-pro", "claude-3-5-sonnet-20241022").
-            max_tokens: Maximum tokens to generate.
-            temperature: Sampling temperature.
-            top_p: Nucleus sampling top-p.
+            messages: List of message dictionaries for chat models.
+            model_name: Model identifier that you set in models.yaml.
             **kwargs: Additional model-specific arguments.
 
         Returns:
             A dict containing the generated text and metadata.
         """
-        provider = self._get_provider(model)
+        if self._closed:
+            raise RuntimeError("Generator has been closed")
+
+        if model_name is None:
+            model_name = self.model_name
+        if model_name is None:
+            raise ValueError("model_name is required")
         
-        if provider == ModelProvider.OPENAI:
-            return self._generate_openai(prompt, model, max_tokens, temperature, top_p, **kwargs)
-        elif provider == ModelProvider.GEMINI:
-            return self._generate_gemini(prompt, model, max_tokens, temperature, top_p, **kwargs)
-        elif provider == ModelProvider.CLAUDE:
-            return self._generate_claude(prompt, model, max_tokens, temperature, top_p, **kwargs)
-        elif provider == ModelProvider.HUGGINGFACE:
-            return self._generate_hf(prompt, max_tokens, temperature, top_p, **kwargs)
-        else:
-            raise ValueError(f"Unsupported model: {model}")
+        if prompt is None and messages is None:
+            raise ValueError("Either prompt or messages must be provided")
+        
+        if prompt is not None and messages is not None:
+            raise ValueError("Cannot provide both prompt and messages")
+        
+        model_config = load_model_config(model_name, self.models, self.credentials)
+
+        if model_config["provider"] == "local":
+            if messages is not None:
+                raise NotImplementedError("Local models only support prompt generation currently.")
+            if not prompt or not prompt.strip():
+                raise ValueError("Prompt cannot be empty for local models")
+            return self._generate_hf(
+                model_config=model_config,
+                prompt=prompt,
+                **kwargs,
+            )
+        
+        return self._generate_litellm(
+            model_config=model_config,
+            prompt=prompt,
+            messages=messages,
+            **kwargs,
+        )
+    
+    @weave.op()
+    def _generate_litellm(
+        self,
+        model_config,
+        prompt: Optional[str] = None,
+        messages: Optional[List[Dict[str, str]]] = None,
+        **kwargs,
+    ) -> Dict[str, Any]:
+        """
+        Internal method to generate text using LiteLLM.
+        """
+        model_name = model_config["model_name"]
+
+        __call_args = model_config.get("__call_args", {})
+        for k, v in __call_args.items():
+            if k not in kwargs:
+                kwargs[k] = v
+        
+        if messages is None:
+            if prompt is None:
+                raise ValueError("Either prompt or messages must be provided")
+            messages = [{"role": "user", "content": prompt}]
+        
+        try:
+            response = litellm.completion(
+                model=f"{model_config['provider']}/{model_config['model']}",
+                messages=messages,
+                **model_config["credentials"],
+                **kwargs,
+            )
+        except Exception as e:
+            raise RuntimeError(f"LiteLLM generation failed for model {model_name}") from e
+        
+        text = response.choices[0].message.content
+        return {
+            "model_name": model_name,
+            "provider": model_config["provider"],
+            "model": model_config["model"],
+            "text": text,
+            "usage": response.usage.model_dump() if response.usage else None,
+            "finish_reason": response.choices[0].finish_reason,
+        }
+    
+    @weave.op()
+    def _generate_hf(
+        self,
+        model_config,
+        prompt: str,
+        **kwargs,
+    ) -> Dict[str, Any]:
+        """
+        Internal method to generate text using a Hugging Face model.
+        """
+        self._load_hf_model_and_tokenizer(model_config["model"])
+
+        max_tokens = kwargs.get("max_tokens", None)
+        max_length = None
+        
+        if max_tokens is not None:
+            try:
+                input_length = len(self.hf_tokenizer(prompt).input_ids)
+                max_length = input_length + max_tokens
+                
+                # Validate against model's maximum length
+                model_max_length = getattr(self.hf_tokenizer, 'model_max_length', None)
+                if model_max_length is not None and max_length > model_max_length:
+                    raise ValueError(f"Requested max_length ({max_length}) exceeds model's maximum ({model_max_length})")
+                    
+            except Exception as e:
+                raise ValueError(f"Error calculating max_length: {e}")
+
+        try:
+            outputs = self.generator(
+                prompt,
+                max_length=max_length,
+                do_sample=True,
+                **kwargs,
+            )
+            generated = outputs[0]["generated_text"]
+            
+            # Extract only the newly generated part
+            new_text = generated[len(prompt):].strip()
+            
+            return {
+                "model_name": model_config["model_name"],
+                "provider": model_config["provider"],
+                "model": model_config["model"],
+                "text": new_text,
+                # "usage": None,
+            }
+        except Exception as e:
+            raise RuntimeError(f"HuggingFace generation failed for model {model_config['model']}: {e}")
 
     async def generate_async(
         self,
-        prompt: str,
-        model: str = "gpt-4o",
-        max_tokens: int = 256,
-        temperature: float = 0.7,
-        top_p: float = 1.0,
+        prompt: Optional[str] = None,
+        messages: Optional[List[Dict[str, str]]] = None,
+        model_name: Optional[str] = None,
         **kwargs,
     ) -> Dict[str, Any]:
         """
         Asynchronous wrapper for generate using ThreadPoolExecutor.
         """
+        if self._closed:
+            raise RuntimeError("Generator has been closed")
+            
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(
             self.executor,
-            lambda: self.generate(prompt, model, max_tokens, temperature, top_p, **kwargs)
+            lambda: self.generate(prompt, messages, model_name, **kwargs)
         )
 
     async def generate_batch_async(
         self,
         prompts: List[str],
-        model: str = "gpt-4o",
-        max_tokens: int = 256,
-        temperature: float = 0.7,
-        top_p: float = 1.0,
+        model_name: Optional[str] = None,
         **kwargs,
     ) -> List[Dict[str, Any]]:
         """
@@ -192,221 +373,49 @@ class Generation:
 
         Args:
             prompts: List of input prompt strings.
-            model: Model identifier.
-            max_tokens: Maximum tokens to generate for each.
-            temperature: Sampling temperature.
-            top_p: Nucleus sampling top-p.
+            model_name: Model identifier.
             **kwargs: Additional model-specific arguments.
 
         Returns:
             A list of dicts containing generated text and metadata for each prompt.
         """
+        if not prompts:
+            return []
+            
         tasks = [
-            self.generate_async(p, model, max_tokens, temperature, top_p, **kwargs) 
+            self.generate_async(p, messages=None, model_name=model_name, **kwargs) 
             for p in prompts
         ]
         return await asyncio.gather(*tasks)
-
-    def _generate_openai(
-        self,
-        prompt: str,
-        model: str,
-        max_tokens: int,
-        temperature: float,
-        top_p: float,
-        **kwargs,
-    ) -> Dict[str, Any]:
-        """
-        Internal method to call OpenAI Chat Completions API.
-        """
-        if not self.openai_client:
-            raise RuntimeError("OpenAI client not configured. Provide an OpenAI API key.")
-        
-        messages = kwargs.get("messages", [{"role": "user", "content": prompt}])
-        
-        response = self.openai_client.chat.completions.create(
-            model=model,
-            messages=messages,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            top_p=top_p,
-            **{k: v for k, v in kwargs.items() if k not in ["messages"]},
-        )
-        
-        text = response.choices[0].message.content
-        return {
-            "provider": "openai",
-            "model": response.model,
-            "text": text,
-            "usage": response.usage.model_dump() if response.usage else None,
-            "finish_reason": response.choices[0].finish_reason,
-        }
-
-    def _generate_gemini(
-        self,
-        prompt: str,
-        model: str,
-        max_tokens: int,
-        temperature: float,
-        top_p: float,
-        **kwargs,
-    ) -> Dict[str, Any]:
-        """
-        Internal method to generate text using Google Gemini API.
-        """
-        if not self.gemini_client:
-            raise RuntimeError("Gemini client not configured. Provide a Gemini API key and install google-generativeai.")
-        
-        # Configure generation parameters
-        generation_config = {
-            "temperature": temperature,
-            "top_p": top_p,
-            "max_output_tokens": max_tokens,
-        }
-        
-        # Create model instance
-        gemini_model = self.gemini_client.GenerativeModel(model)
-        
-        # Generate content
-        response = gemini_model.generate_content(
-            prompt,
-            generation_config=generation_config
-        )
-        
-        return {
-            "provider": "gemini",
-            "model": model,
-            "text": response.text,
-            "usage": {
-                "prompt_tokens": response.usage_metadata.prompt_token_count if response.usage_metadata else None,
-                "completion_tokens": response.usage_metadata.candidates_token_count if response.usage_metadata else None,
-                "total_tokens": response.usage_metadata.total_token_count if response.usage_metadata else None,
-            },
-            "finish_reason": response.candidates[0].finish_reason.name if response.candidates else None,
-        }
-
-    def _generate_claude(
-        self,
-        prompt: str,
-        model: str,
-        max_tokens: int,
-        temperature: float,
-        top_p: float,
-        **kwargs,
-    ) -> Dict[str, Any]:
-        """
-        Internal method to generate text using Anthropic Claude API.
-        """
-        if not self.claude_client:
-            raise RuntimeError("Claude client not configured. Provide a Claude API key and install anthropic.")
-        
-        messages = kwargs.get("messages", [{"role": "user", "content": prompt}])
-        
-        response = self.claude_client.messages.create(
-            model=model,
-            messages=messages,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            top_p=top_p,
-            **{k: v for k, v in kwargs.items() if k not in ["messages"]},
-        )
-        
-        text = response.content[0].text if response.content else ""
-        return {
-            "provider": "claude",
-            "model": response.model,
-            "text": text,
-            "usage": {
-                "input_tokens": response.usage.input_tokens,
-                "output_tokens": response.usage.output_tokens,
-                "total_tokens": response.usage.input_tokens + response.usage.output_tokens,
-            },
-            "finish_reason": response.stop_reason,
-        }
-
-    def _generate_hf(
-        self,
-        prompt: str,
-        max_tokens: int,
-        temperature: float,
-        top_p: float,
-        **kwargs,
-    ) -> Dict[str, Any]:
-        """
-        Internal method to generate text using a Hugging Face model.
-        """
-        if not self.generator:
-            raise RuntimeError("Hugging Face model not configured. Provide a model name.")
-        
-        outputs = self.generator(
-            prompt,
-            max_length=len(self.hf_tokenizer(prompt).input_ids) + max_tokens,
-            temperature=temperature,
-            top_p=top_p,
-            do_sample=True,
-            **kwargs,
-        )
-        generated = outputs[0]["generated_text"]
-        
-        # Extract only the newly generated part
-        new_text = generated[len(prompt):].strip()
-        
-        return {
-            "provider": "huggingface",
-            "model": self.hf_model.config._name_or_path,
-            "text": new_text,
-            "usage": None,
-        }
 
     def list_available_models(self) -> Dict[str, List[str]]:
         """
         List all available models by provider.
         """
-        available = {}
-        
-        if self.openai_client:
-            available["openai"] = list(self.openai_models)
-        
-        if self.gemini_client:
-            available["gemini"] = list(self.gemini_models)
-        
-        if self.claude_client:
-            available["claude"] = list(self.claude_models)
-        
-        if self.generator:
-            available["huggingface"] = [self.hf_model.config._name_or_path]
-        
-        return available
+        raise NotImplementedError("This class supports almost all models via LiteLLM. You just need to set the model name in models.yaml and credentials in credentials.yaml.")
 
 
 if __name__ == "__main__":
-    # Example usage
-    import asyncio
-
+    # Initialize weave for testing this module only
+    weave.init("generation_module_test")
+    
     # Initialize with multiple providers
-    gen = Generation(
-        openai_api_key="YOUR_OPENAI_KEY",
-        gemini_api_key="YOUR_GEMINI_KEY", 
-        claude_api_key="YOUR_CLAUDE_KEY",
-        max_workers=8
-    )
-    
-    # List available models
-    print("Available models:", gen.list_available_models())
-    
-    # Test different models
-    prompts = ["Hello world!", "What is AI?", "Science discovery?"]
-    models = ["gpt-4o", "gemini-1.5-pro", "claude-3-5-sonnet-20241022"]
-    
-    async def test_models():
-        for model in models:
-            try:
-                print(f"\nTesting {model}:")
-                results = await gen.generate_batch_async(prompts, model=model, max_tokens=50)
-                for i, res in enumerate(results):
-                    print(f"  Prompt {i}: {res['text'][:100]}...")
-            except Exception as e:
-                print(f"  Error with {model}: {e}")
-    
-    # Run async test
-    asyncio.run(test_models())
+    with Generation(max_workers=8) as gen:
+        
+        # Test different models
+        prompts = ["Hello world!"]
+        models = ["openai/gpt-4.1-nano-2025-04-14", "huggingface/Qwen/Qwen3-0.6B"]
+        
+        async def test_models():
+            for model in models:
+                try:
+                    print(f"\nTesting {model}:")
+                    results = await gen.generate_batch_async(prompts, model_name=model)
+                    for i, res in enumerate(results):
+                        print(f"  Prompt {i}: {res['text'][:100]}...")
+                except Exception as e:
+                    print(f"  Error with {model}: {e}")
+                    raise e
+        
+        # Run async test
+        asyncio.run(test_models())
