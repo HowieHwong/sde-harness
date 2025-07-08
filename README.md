@@ -3,7 +3,7 @@
   <img src="asset/SDE-harness-logo_00.png" alt="SDE-Harness Logo" style="width:100%;max-width:700px;min-width:300px;display:block;margin:0 auto;"/>
 </p>
 
-# SDE-Harness (Scientific Discovery Evaluation Framework)
+# SDE-Harness (Scientific Discovery Evaluation Frame)
 
 <p align="center">
   <!-- Supported LLMs -->
