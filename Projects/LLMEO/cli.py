@@ -8,7 +8,6 @@ import argparse
 import sys
 import os
 from typing import Optional
-
 # Add project root to Python path
 project_root = os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -16,6 +15,8 @@ project_root = os.path.dirname(
 sys.path.insert(0, project_root)
 
 # Import local modules
+from Projects.LLMEO.modes.structued_output_few_shot import run_few_shot_structured
+from Projects.LLMEO.modes.structured_output_single_prop import run_single_prop_structured
 from modes import run_few_shot, run_single_prop, run_multi_prop
 from utils.data_loader import validate_data_files
 
@@ -46,6 +47,7 @@ Example usage:
     common_args.add_argument("--seed", type=int, default=42, help="Random seed (default: 42)")
     common_args.add_argument("--model", type=str, default="deepseek/deepseek-chat", help="Choose From [openai/gpt-4o-2024-08-06, anthropic/claude-3-7-sonnet-20250219, deepseek/deepseek-chat]")
     common_args.add_argument("--temperature", type=float, default=1, help="Temperature")
+    common_args.add_argument("--response-format", type=bool, default=False, help="Response format")
     # Few-shot mode
     few_shot_parser = subparsers.add_parser(
         "few-shot", parents=[common_args], help="Few-shot learning mode - Learning based on a few samples",
@@ -75,6 +77,13 @@ Example usage:
 
     # Run corresponding mode
     try:
+        if args.response_format == True and args.mode == "few-shot":
+            print(args)
+            run_few_shot_structured(args)
+        if args.response_format == True and args.mode == "single-prop":
+            print(args)
+            run_single_prop_structured(args)
+
         if args.mode == "few-shot":
             print(args)
             run_few_shot(args)
