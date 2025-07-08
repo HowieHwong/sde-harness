@@ -84,7 +84,7 @@ async def batch_example():
     
     results = await gen.generate_batch_async(
         prompts=prompts,
-        model="openai/gpt-4o-2024-08-06",
+        model_name="openai/gpt-4o-2024-08-06",
         max_tokens=100
     )
     
@@ -466,7 +466,7 @@ print(f"Improvement rate: {result['final_scores'].get('improvement_rate', 0):.3f
 
 4. **Async Processing**: Use async methods for batch processing:
    ```python
-   results = await gen.generate_batch_async(prompts, model="gpt-4o")
+   results = await gen.generate_batch_async(prompts, model_name="gpt-4o")
    ```
 
 5. **Memory Management**: For long workflows, consider limiting history size in custom prompt functions
