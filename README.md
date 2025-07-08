@@ -3,7 +3,7 @@
   <img src="asset/SDE-harness-logo_00.png" alt="SDE-Harness Logo" style="width:100%;max-width:700px;min-width:300px;display:block;margin:0 auto;"/>
 </p>
 
-# SDE-Harness (Scientific Discovery Evaluation)
+# SDE-Harness (Scientific Discovery Evaluation Framework)
 
 <p align="center">
   <!-- Supported LLMs -->
@@ -468,44 +468,6 @@ print(f"Best iteration: {result['best_iteration']['iteration']}")
 print(f"Improvement rate: {result['final_scores'].get('improvement_rate', 0):.3f}")
 ```
 
-## 🛠️ Performance Tips
-
-1. **Enable History Selectively**: Use `enable_history_in_prompts=False` for simple tasks that don't benefit from history
-
-2. **Choose Appropriate Templates**:
-   - Use `iterative` for basic iteration
-   - Use `iterative_with_feedback` when you want to show scores
-   - Use `conversation` for dialogue-style interactions
-
-3. **Model Selection**: Choose the right model for your use case:
-   - `gpt-4o`: Best overall performance, multimodal capabilities
-   - `gpt-4o-mini`: Faster and cheaper alternative
-   - `gemini-1.5-flash`: Fast responses with good quality
-   - `claude-3-5-haiku`: Quick responses for simple tasks
-
-4. **Async Processing**: Use async methods for batch processing:
-   ```python
-   results = await gen.generate_batch_async(prompts, model_name="gpt-4o")
-   ```
-
-5. **Memory Management**: For long workflows, consider limiting history size in custom prompt functions
-
-## 📁 Project Structure
-
-```
-sci_demo/
-├── generation.py          # Multi-provider AI text generation
-├── prompt.py             # History-aware prompt management
-├── oracle.py             # Multi-round evaluation system
-└── workflow.py           # Iterative workflow orchestration
-
-examples/
-├── generation_examples.py        # Basic generation examples
-└── history_workflow_examples.py  # Advanced workflow examples
-
-requirements.txt          # Project dependencies
-README.md                 # This file
-```
 
 ## 🔍 Troubleshooting
 
@@ -541,3 +503,16 @@ When adding new features:
 ## 📄 License
 
 This project is licensed under the MIT License.
+
+## 📖 Citation
+
+If you use SDE-Harness in your research or project, please cite it as follows:
+
+```bibtex
+@misc{sde-harness,
+  title        = {SDE-Harness: Scientific Discovery Evaluation Framework},
+  author       = {SDE-Harness Team},
+  year         = {2024},
+  howpublished = {\url{https://github.com/your-org/SDE-Harness}}
+}
+```
