@@ -1,6 +1,25 @@
-# Science Discovery Framework
+<!-- Logo -->
+<p align="center" style="width:100%;margin:0 auto;">
+  <img src="asset/SDE-harness-logo_00.png" alt="SDE-Harness Logo" style="width:100%;max-width:700px;min-width:300px;display:block;margin:0 auto;"/>
+</p>
 
-A comprehensive framework for AI-powered scientific discovery with multi-provider LLM support, iterative workflows, and advanced evaluation capabilities.
+# SDE-Harness (Scientific Discovery Evaluation)
+
+<p align="center">
+  <!-- Supported LLMs -->
+  <img src="https://img.shields.io/badge/OpenAI-ChatGPT-blue?logo=openai&logoColor=white" alt="OpenAI Supported"/>
+  <img src="https://img.shields.io/badge/Google-Gemini-4285F4?logo=google&logoColor=white" alt="Google Gemini Supported"/>
+  <img src="https://img.shields.io/badge/Anthropic-Claude-FF9900?logo=anthropic&logoColor=white" alt="Anthropic Supported"/>
+  <!-- Frameworks -->
+  <img src="https://img.shields.io/badge/LiteLLM-Supported-6A1B9A?logo=python&logoColor=white" alt="LiteLLM Supported"/>
+  <img src="https://img.shields.io/badge/Weave-Logging-FF4B4B?logo=wandb&logoColor=white" alt="Weave Logging"/>
+  <!-- License -->
+  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License"></a>
+  <!-- Docs -->
+  <a href="https://your-docs-link"><img src="https://img.shields.io/badge/docs-latest-brightgreen.svg" alt="Documentation"></a>
+</p>
+
+SDE-Harness (Scientific Discovery Evaluation) is a comprehensive, extensible framework designed to accelerate AI-powered scientific discovery. It supports multi-provider LLMs, iterative and history-aware workflows, and advanced multi-round evaluation, making it ideal for research, benchmarking, and rapid prototyping in scientific domains.
 
 ## 🚀 Features
 
