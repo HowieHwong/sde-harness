@@ -122,3 +122,48 @@ def find_tmc_in_space(df: pd.DataFrame, tmcs: List[str]) -> Optional[pd.DataFram
                 break  # Found a match, move to next TMC
 
     return pd.concat(matched_tmcs) if matched_tmcs else None
+
+
+def find_tmc_in_space2(df: pd.DataFrame, tmcs: List[str]) -> Optional[pd.DataFrame]:
+    """
+    Find TMCs in the search space by checking all possible rotations of ligands.
+
+    Args:
+        df: DataFrame containing the TMC search space
+        tmcs: List of TMC strings to search for
+
+    Returns:
+        DataFrame containing matched TMCs, or None if no matches found
+    """
+    matched_tmcs = []
+
+    for tmc in tmcs:
+        if tmc is None:
+            continue
+
+        # Get ligands from TMC string
+        ligs = tmc
+        miss = 0
+        # Check all possible rotational combinations of ligands
+        rotations = [ligs[i:] + ligs[:i] for i in range(4)]
+
+        # Search for each rotation in the DataFrame
+        for rot_ligs in rotations:
+            match_df = df[
+                (df["lig1"] == rot_ligs[0])
+                & (df["lig2"] == rot_ligs[1])
+                & (df["lig3"] == rot_ligs[2])
+                & (df["lig4"] == rot_ligs[3])
+            ]
+
+            if len(match_df):
+                matched_tmcs.append(match_df)
+                print("matched_tmcs: "+str(tmc))
+                break  # Found a match, move to next TMC
+            else:
+                miss+=1
+                if miss>3:
+                    print("miss: "+str(tmc))
+        
+
+    return pd.concat(matched_tmcs) if matched_tmcs else None
