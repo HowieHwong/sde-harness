@@ -473,11 +473,10 @@ print(f"Improvement rate: {result['final_scores'].get('improvement_rate', 0):.3f
 
 ### Common Issues
 
-1. **API Key Not Found**: Ensure environment variables are set or pass keys directly
-2. **Model Not Available**: Check if the model name is correct and the provider is configured
-3. **Import Errors**: Install optional dependencies for Gemini (`google-generativeai`) or Claude (`anthropic`)
-4. **Template Variables Missing**: Ensure all required variables are provided or use default values
-5. **Multi-Round Metrics Errors**: Check that history data structure is correct
+1. **LiteLLM Errors**: Ensure the model names and credentials are correctly set in `models.yaml` and `credentials.yaml`.
+2. **Import Errors**: Ensure the dependencies mentioned in the error message are installed. In most cases, they are dependencies of LLM providers.
+3. **Template Variables Missing**: Ensure all required variables are provided or use default values.
+4. **Multi-Round Metrics Errors**: Check that history data structure is correct.
 
 ### Debug Mode
 
