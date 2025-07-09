@@ -1,5 +1,8 @@
 # Large Language Model is Secretly a Protein Sequence Optimizer
 
+## Original Code Repository
+[https://github.com/HassounLab/LLMProteinOptimizer.git](https://github.com/HassounLab/LLMProteinOptimizer.git)
+
 
 A framework for optimizing protein sequences using large language models (LLMs) and evolutionary algorithms. This project combines the power of state-of-the-art language models with traditional optimization techniques to improve protein properties.
 
