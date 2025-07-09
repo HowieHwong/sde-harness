@@ -1,0 +1,32 @@
+data:
+  csv_path: null
+  cluster_cutoff: 128
+  max_visits: 1
+  clustering: true
+run:
+  max_epochs: 10
+  run_name: temp-${experiment.temperature}-ngibbs-${experiment.gibbs_samples}-epochs-${run.max_epochs}
+  debug: false
+  seed: 1
+  save_cluster_centers: false
+task_name: GWG
+paths:
+  root_dir: ${oc.env:PROJECT_ROOT}
+  data_dir: ${paths.root_dir}/data/
+  src_dir: ${paths.root_dir}/ggs/
+  config_dir: ${paths.src_dir}/configs/
+  sample_dir: ${paths.root_dir}/samples/
+  ckpt_dir: ${paths.root_dir}/ckpt/
+  log_dir: ${paths.root_dir}/logs/
+  output_dir: ${hydra:runtime.output_dir}
+  work_dir: ${hydra:runtime.cwd}
+extras:
+  ignore_warnings: true
+  enforce_tags: false
+  print_config: true
+experiment:
+  predictor_dir: /home/jhe/GGS/ckpt/GFP/mutations_7/percentile_0.0_0.3/unsmoothed_smoothed
+  temperature: 0.01
+  gibbs_samples: 1000
+  verbose: false
+  ckpt_name: last.ckpt

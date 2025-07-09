@@ -1,0 +1,92 @@
+model:
+  optimizer:
+    lr: 0.0001
+    weight_decay: 0.0001
+  predictor:
+    n_tokens: 20
+    kernel_size: 5
+    input_size: 256
+    dropout: 0.0
+    name: CNN
+    activation: relu
+    linear: true
+    seq_len: 237
+trainer:
+  default_root_dir: ${paths.output_dir}
+  min_epochs: 1
+  max_epochs: 1000
+  accelerator: gpu
+  log_every_n_steps: 1
+  check_val_every_n_epoch: 1
+  deterministic: false
+data:
+  task: ${experiment.task}
+  seed: 420
+  batch_size: 1024
+  pin_memory: false
+  num_workers: 8
+  encoding: onehot
+  alphabet: ARNDCQEGHILKMFPSTWYV
+  val_samples: 200
+  sequence_column: sequence
+callbacks:
+  model_checkpoint:
+    _target_: pytorch_lightning.callbacks.ModelCheckpoint
+    dirpath: ./ckpt/GFP/mutations_7/percentile_0.0_0.3/unsmoothed/predictor
+    filename: epoch_{epoch:03d}
+    monitor: val/spearmanr
+    mode: max
+    save_last: true
+    save_top_k: 3
+    auto_insert_metric_name: false
+    save_weights_only: false
+    every_n_train_steps: null
+    train_time_interval: null
+    every_n_epochs: null
+    save_on_train_epoch_end: null
+wandb:
+  _target_: pytorch_lightning.loggers.wandb.WandbLogger
+  name: null
+  save_dir: ${paths.output_dir}
+  offline: true
+  project: ${data.task}
+  log_model: false
+model_checkpoint_dir: null
+preprocessed_data_path: null
+num_gpus: 1
+run_name: null
+debug: false
+task_name: train_predictor
+tags:
+- dev
+- latest
+ckpt_path: null
+seed: null
+paths:
+  root_dir: ${oc.env:PROJECT_ROOT}
+  data_dir: ${paths.root_dir}/data/
+  src_dir: ${paths.root_dir}/ggs/
+  config_dir: ${paths.src_dir}/configs/
+  sample_dir: ${paths.root_dir}/samples/
+  ckpt_dir: ${paths.root_dir}/ckpt/
+  log_dir: ${paths.root_dir}/logs/
+  output_dir: ${hydra:runtime.output_dir}
+  work_dir: ${hydra:runtime.cwd}
+extras:
+  ignore_warnings: false
+  enforce_tags: false
+  print_config: true
+experiment:
+  seq_len: 237
+  task: GFP
+  gfp:
+    csv_path: ${paths.data_dir}/GFP/ground_truth.csv
+    output_dir: ${paths.data_dir}/GFP/
+    filter_percentile:
+    - 0.0
+    - 0.3
+    min_mutant_dist: 7
+    top_quantile: 0.99
+    
+    
+    smoothed_data_fname: null

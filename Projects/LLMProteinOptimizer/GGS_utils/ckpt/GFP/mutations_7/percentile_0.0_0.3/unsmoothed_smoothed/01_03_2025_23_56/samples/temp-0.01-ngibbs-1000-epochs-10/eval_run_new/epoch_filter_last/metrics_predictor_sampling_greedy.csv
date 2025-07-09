@@ -1,0 +1,2 @@
+num_unique,mean_fitness,median_fitness,std_fitness,max_fitness,mean_diversity,mean_novelty,median_novelty,source_path
+128,0.04535618331283331,0.045226335525512695,0.00043970274935466636,0.0469488650560379,5.747047244094488,7.71875,8.0,/home/jhe/GGS/ckpt/GFP/mutations_7/percentile_0.0_0.3/unsmoothed_smoothed/01_03_2025_23_56/samples/temp-0.01-ngibbs-1000-epochs-10/seed_1.csv
