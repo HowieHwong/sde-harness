@@ -1,0 +1,5 @@
+population_size: 50
+# offspring_size: 70
+iteration: -1
+max_call: -1
+mutation_rate: 0.3
