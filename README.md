@@ -1,6 +1,6 @@
 <!-- Logo -->
-<p align="center" style="width:60%;margin:0 auto;">
-  <img src="assets/SDE-harness-logo_00.png" alt="SDE-Harness Logo" style="width:100%;max-width:700px;min-width:300px;display:block;margin:0 auto;"/>
+<p align="center" style="width:90%;margin:0 auto;">
+  <img src="assets/SDE-harness-logo_00.png" alt="SDE-Harness Logo" style="width:100%;max-width:1200px;min-width:300px;display:block;margin:0 auto;"/>
 </p>
 
 # SDE-Harness (Scientific Discovery Evaluation Framework)
