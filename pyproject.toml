@@ -1,0 +1,66 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sde-harness"
+version = "0.1.0"
+description = "Scientific Discovery Evaluation Framework for LLM-based research"
+readme = "README.md"
+license = {file = "LICENSE"}
+authors = [
+    {name = "SDE-Harness Team"}
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+requires-python = ">=3.8"
+dependencies = [
+    "torch>=2.0.0",
+    "transformers>=4.30.0",
+    "numpy>=1.21.0",
+    "litellm>=1.73.6",
+    "weave>=0.51.54",
+    "scipy>=1.9.0",
+    "scikit-learn>=1.1.0",
+    "openai>=1.0.0",
+    "google-generativeai>=0.3.0",
+    "anthropic>=0.25.0",
+    "asyncio-throttle>=1.0.0",
+    "tenacity>=8.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "black>=22.0.0",
+    "flake8>=5.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/your-org/sde-harness"
+Documentation = "https://github.com/your-org/sde-harness/docs"
+Repository = "https://github.com/your-org/sde-harness.git"
+Issues = "https://github.com/your-org/sde-harness/issues"
+
+[tool.setuptools.packages.find]
+include = ["sde_harness*"]
+exclude = ["tests*", "projects*"]
+
+[tool.black]
+line-length = 88
+target-version = ["py38", "py39", "py310", "py311"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
