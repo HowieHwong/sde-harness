@@ -1,6 +1,6 @@
 <!-- Logo -->
 <p align="center" style="width:60%;margin:0 auto;">
-  <img src="asset/SDE-harness-logo_00.png" alt="SDE-Harness Logo" style="width:100%;max-width:700px;min-width:300px;display:block;margin:0 auto;"/>
+  <img src="assets/SDE-harness-logo_00.png" alt="SDE-Harness Logo" style="width:100%;max-width:700px;min-width:300px;display:block;margin:0 auto;"/>
 </p>
 
 # SDE-Harness (Scientific Discovery Evaluation Framework)
@@ -44,8 +44,8 @@ This only installs the basic dependencies for the framework and some LLM provide
 ## 🔧 Configuration
 
 ```bash
-cp models.template.yaml models.yaml
-cp credentials.template.yaml credentials.yaml
+cp config/models.template.yaml models.yaml
+cp config/credentials.template.yaml credentials.yaml
 ```
 
 Then, edit the `models.yaml` and `credentials.yaml` files to add your LLM info and credentials. Via [LiteLLM](https://docs.litellm.ai/docs/providers), you could use almost all LLMs and providers, such as OpenAI, Google Gemini, Anthropic, Azure OpenAI, Amazon Bedrock, etc. It also supports running local models from Hugging Face.
@@ -63,7 +63,7 @@ Unified interface for text generation across multiple AI providers.
 
 ```python
 import weave
-from sci_demo.generation import Generation
+from sde_harness.core.generation import Generation
 
 weave.init("my_research_project")  # the project name in Weave
 
@@ -129,7 +129,7 @@ Enhanced prompt management with history support for iterative workflows.
 #### History Support
 
 ```python
-from sci_demo.prompt import Prompt
+from sde_harness.core.prompt import Prompt
 
 # Create an iterative prompt
 prompt = Prompt(
@@ -167,7 +167,7 @@ Advanced evaluation system supporting both single-round and multi-round metrics.
 #### Usage
 
 ```python
-from sci_demo.oracle import Oracle, improvement_rate_metric
+from sde_harness.core.oracle import Oracle, improvement_rate_metric
 
 oracle = Oracle()
 
@@ -203,7 +203,7 @@ Orchestrates multi-stage iterative processes with automatic history integration.
 
 ```python
 import weave
-from sci_demo.workflow import Workflow
+from sde_harness.core.workflow import Workflow
 
 weave.init("my_research_project")  # the project name in Weave
 
@@ -407,8 +407,8 @@ for model in models:
 
 ```python
 from sci_demo.generation import Generation
-from sci_demo.workflow import Workflow
-from sci_demo.oracle import Oracle, improvement_rate_metric
+from sde_harness.core.workflow import Workflow
+from sde_harness.core.oracle import Oracle, improvement_rate_metric
 
 # Setup components
 gen = Generation(
