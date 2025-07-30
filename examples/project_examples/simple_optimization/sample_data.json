@@ -1,0 +1,92 @@
+{
+  "optimization_targets": [
+    {
+      "name": "answer_to_everything",
+      "target": 42,
+      "description": "The Answer to the Ultimate Question of Life, the Universe, and Everything"
+    },
+    {
+      "name": "perfect_score", 
+      "target": 100,
+      "description": "A perfect score"
+    },
+    {
+      "name": "lucky_number",
+      "target": 7,
+      "description": "A commonly considered lucky number"
+    },
+    {
+      "name": "dozen",
+      "target": 12,
+      "description": "A dozen items"
+    },
+    {
+      "name": "century",
+      "target": 100, 
+      "description": "One hundred"
+    }
+  ],
+  
+  "sample_expressions": {
+    "simple": [
+      "1 + 1",
+      "5 * 2", 
+      "15 - 3",
+      "24 / 2"
+    ],
+    "medium": [
+      "3 * 4 + 5",
+      "20 - 8 / 2",
+      "6 + 7 * 2",
+      "45 / 3 - 2"
+    ],
+    "complex": [
+      "2 * 3 + 4 * 5",
+      "100 / 4 + 25 - 8",
+      "3 * (4 + 5) - 2",
+      "50 - 15 / 3 + 7"
+    ]
+  },
+  
+  "operation_examples": {
+    "addition": {
+      "symbol": "+",
+      "examples": ["5 + 3", "12 + 8", "25 + 17"]
+    },
+    "subtraction": {
+      "symbol": "-", 
+      "examples": ["50 - 8", "15 - 3", "100 - 58"]
+    },
+    "multiplication": {
+      "symbol": "*",
+      "examples": ["6 * 7", "4 * 10", "3 * 14"]
+    },
+    "division": {
+      "symbol": "/",
+      "examples": ["84 / 2", "60 / 3", "45 / 5"]
+    }
+  },
+  
+  "test_cases": [
+    {
+      "target": 10,
+      "expected_solutions": ["5 + 5", "2 * 5", "15 - 5", "20 / 2"],
+      "difficulty": "easy"
+    },
+    {
+      "target": 25,
+      "expected_solutions": ["5 * 5", "30 - 5", "50 / 2", "20 + 5"],
+      "difficulty": "easy"
+    },
+    {
+      "target": 37,
+      "expected_solutions": ["40 - 3", "30 + 7", "74 / 2", "6 * 6 + 1"],
+      "difficulty": "medium"
+    },
+    {
+      "target": 73,
+      "expected_solutions": ["70 + 3", "80 - 7", "146 / 2", "8 * 9 + 1"],
+      "difficulty": "medium"
+    }
+  ]
+}
