@@ -16,8 +16,8 @@ project_root = os.path.dirname(
 sys.path.insert(0, project_root)
 
 # Import local modules
-from modes import run_few_shot, run_single_prop, run_multi_prop
-from utils.data_loader import validate_data_files
+from src.modes import run_few_shot, run_single_prop, run_multi_prop
+from src.utils.data_loader import validate_data_files
 
 
 def main():

@@ -9,7 +9,7 @@
 
 1. Get to the Project folder:
    ```bash
-   cd Projects/LLMEO
+   cd projects/llmeo
    ```
 
 2. Set Your API KEY:
@@ -91,24 +91,33 @@ All modes support the following parameters:
 ## 🏗️ Project Structure
 
 ```
-Projects/LLMEO/
+projects/llmeo/
 ├── cli.py              # Command line entry point
-├── main.py             # Original main file (preserved)
-├── modes/              # Running mode modules
+├── src/                # Source code directory
+│   ├── modes/          # Running mode modules
+│   │   ├── __init__.py
+│   │   ├── few_shot.py     # Few-shot learning mode
+│   │   ├── single_prop.py  # Single property optimization mode
+│   │   └── multi_prop.py   # Multi-property optimization mode
+│   ├── utils/          # Utility modules
+│   │   ├── __init__.py
+│   │   ├── data_loader.py  # Data loading utilities
+│   │   ├── prompt.py       # Prompt templates
+│   │   └── _utils.py       # Utility functions
+│   └── evaluators/     # Evaluation modules
+├── data/               # Data files
+├── docs/               # Documentation
+├── tests/              # Test files
 │   ├── __init__.py
-│   ├── few_shot.py     # Few-shot learning mode
-│   ├── single_prop.py  # Single property optimization mode
-│   ├── multi_prop.py   # Multi-property optimization mode
-│   
-├── config/             # Configuration management
-│   ├── __init__.py
-│   └── settings.py     # Configuration management module
-├── utils/              # Utility modules
-│   ├── __init__.py
-│   └── data_loader.py  # Data loading utilities
-├── prompt.py           # Prompt templates
-├── _utils.py           # Utility functions
+│   ├── conftest.py
+│   ├── run_tests.py
+│   ├── test_cli.py
+│   ├── test_data_loader.py
+│   ├── test_modes.py
+│   ├── test_prompts.py
+│   └── test_utils.py
 ├── test.py             # Test file
+├── pytest.ini          # Pytest configuration
 ├── environment.yml     # Environment configuration
 └── README.md           # This document
 ```
@@ -117,15 +126,15 @@ Projects/LLMEO/
 
 ### Adding New Running Modes
 
-1. Create a new mode file in the `modes/` directory
+1. Create a new mode file in the `src/modes/` directory
 2. Implement the mode function, e.g., `run_new_mode(args)`
-3. Import the new function in `modes/__init__.py`
+3. Import the new function in `src/modes/__init__.py`
 4. Add new subcommand in `cli.py`
 
 Example:
 
 ```python
-# modes/new_mode.py
+# src/modes/new_mode.py
 def run_new_mode(args):
     """Logic for running new mode"""
     print("🆕 Running new mode...")
@@ -199,7 +208,7 @@ python cli.py few-shot --debug
 ```bash
 # 1. Set up environment
 export OPENAI_API_KEY="your-key"
-cd Projects/LLMEO
+cd projects/llmeo
 
 # 2. Run Few-shot mode
 python cli.py few-shot
