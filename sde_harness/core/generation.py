@@ -270,7 +270,7 @@ class Generation:
         
         # Handle O-series models which have specific parameter requirements
         model_id = f"{model_config['provider']}/{model_config['model']}"
-        if any(o_model in model_id.lower() for o_model in ['o1', 'o3', 'o2']):
+        if any(o_model in model_id.lower() for o_model in ['o1', 'o2', 'o3', 'o4']):
             # O-series models only support temperature=1
             kwargs['temperature'] = 1.0
             # Drop unsupported parameters to avoid errors
