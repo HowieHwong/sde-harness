@@ -1,0 +1,56 @@
+# Simple Optimization Configuration
+
+# Optimization parameters
+optimization:
+  target_value: 42
+  max_iterations: 10
+  tolerance: 0.1  # Success if within this range of target
+  
+  # Initial expressions to start optimization
+  initial_expressions:
+    - "5 + 3"
+    - "10 * 2" 
+    - "7 + 8"
+    - "15 - 3"
+  
+  # Allowed mathematical operations
+  allowed_operations: ["+", "-", "*", "/"]
+  
+  # Expression complexity limits
+  max_terms: 5
+  max_value: 100
+
+# LLM generation settings
+generation:
+  model_name: "openai/gpt-4o-2024-08-06"
+  max_tokens: 2000
+  temperature: 0.7
+  
+# Evaluation settings  
+evaluation:
+  # Metrics to track
+  metrics:
+    - "error_distance"      # How far from target
+    - "expression_validity" # Is expression mathematically valid
+    - "complexity_score"    # Complexity penalty
+  
+  # Multi-round metrics
+  multi_round_metrics:
+    - "improvement_rate"    # Rate of improvement over iterations
+    - "convergence_trend"   # Whether we're converging to target
+
+# Workflow settings
+workflow:
+  enable_multi_round_metrics: true
+  
+  # Stop criteria - stop if any condition is met
+  stop_criteria:
+    target_achieved: true     # Stop if target is reached within tolerance
+    max_iterations_reached: true
+    no_improvement_rounds: 3  # Stop if no improvement for N rounds
+
+# Output settings
+output:
+  verbose: true
+  save_history: true
+  show_intermediate_results: true
