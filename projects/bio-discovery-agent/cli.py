@@ -27,7 +27,7 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Example usage:
-  python cli.py perturb-genes --data-name IFNG --steps 5 --num-genes 128
+  python cli.py perturb-genes --model openai/gpt-4o-2024-08-06 --run-name test-oracle --data-name IFNG --steps 5 --num-genes 128 --log-dir gpt4 --task-variant brief
   python cli.py baseline --data-name IFNG --sample-size 128  # Not implemented yet
   python cli.py analyze --dataset Carnevale22_Adenosine --model gpt-4o-2024-08-06
         """,
@@ -76,6 +76,10 @@ Example usage:
                               help="Enable Reactome pathway search")
     perturb_parser.add_argument("--csv-path", type=str, default="./",
                               help="Path to CSV files for gene search")
+    perturb_parser.add_argument("--use-oracle", action="store_true", default=True,
+                              help="Use Oracle-based evaluator (default: True)")
+    perturb_parser.add_argument("--no-oracle", dest="use_oracle", action="store_false",
+                              help="Use standard evaluator instead of Oracle")
     
     # Baseline mode
     baseline_parser = subparsers.add_parser(

@@ -18,6 +18,7 @@ from ..utils.prompts import get_prompt_template
 from ..utils.tools import BioDiscoveryTools
 from ..utils.llm_interface import BioLLMInterface
 from ..evaluators.bio_metrics import BioEvaluator
+from ..evaluators.oracle_evaluator import BioOracleEvaluator
 
 
 def parse_gene_solution(response: str, is_pairs: bool = False) -> List[str]:
@@ -307,7 +308,12 @@ def run_perturb_genes(args) -> Dict[str, Any]:
     
     # Initialize components
     llm_interface = BioLLMInterface(model=args.model)
-    evaluator = BioEvaluator(args.data_name)
+    
+    # Use Oracle-based evaluator if requested, otherwise use standard evaluator
+    if getattr(args, 'use_oracle', True):  # Default to Oracle
+        evaluator = BioOracleEvaluator(args.data_name)
+    else:
+        evaluator = BioEvaluator(args.data_name)
     
     # Determine if using pairs
     is_pairs = task_variant in ["brief-NormanGI", "brief-Horlbeck"]
@@ -467,15 +473,30 @@ def run_perturb_genes(args) -> Dict[str, Any]:
         all_tested_genes_set.update(predicted_genes)
         
         # Evaluate this round
-        round_eval = evaluator.evaluate(predicted_genes, step + 1)
+        if isinstance(evaluator, BioOracleEvaluator):
+            # Build history for Oracle evaluator
+            history = {
+                "prompts": [],  # Could add prompts if needed
+                "outputs": [r["predicted_genes"] for r in round_results],
+                "scores": [r for r in round_results]
+            }
+            round_eval = evaluator.evaluate_with_history(predicted_genes, history, step + 1)
+        else:
+            round_eval = evaluator.evaluate(predicted_genes, step + 1)
         round_results.append(round_eval)
         
         # Get hits with their scores
         new_hits = evaluator.get_hits(predicted_genes)
-        for hit_gene in new_hits:
-            if hit_gene in ground_truth.index:
-                score = ground_truth.loc[hit_gene].values[0] if hasattr(ground_truth.loc[hit_gene], 'values') else ground_truth.loc[hit_gene]
-                all_hits.append((hit_gene, score))
+        if isinstance(evaluator, BioOracleEvaluator):
+            # Use Oracle evaluator's score retrieval
+            hit_scores = evaluator.get_gene_scores(new_hits)
+            all_hits.extend(hit_scores)
+        else:
+            # Original score retrieval
+            for hit_gene in new_hits:
+                if hit_gene in ground_truth.index:
+                    score = ground_truth.loc[hit_gene].values[0] if hasattr(ground_truth.loc[hit_gene], 'values') else ground_truth.loc[hit_gene]
+                    all_hits.append((hit_gene, score))
         
         hits_history.append(len(all_hits))
         
