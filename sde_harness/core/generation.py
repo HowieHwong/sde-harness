@@ -268,6 +268,14 @@ class Generation:
             if k not in kwargs:
                 kwargs[k] = v
         
+        # Handle O-series models which have specific parameter requirements
+        model_id = f"{model_config['provider']}/{model_config['model']}"
+        if any(o_model in model_id.lower() for o_model in ['o1', 'o2', 'o3', 'o4']):
+            # O-series models only support temperature=1
+            kwargs['temperature'] = 1.0
+            # Drop unsupported parameters to avoid errors
+            kwargs['drop_params'] = True
+        
         if messages is None:
             if prompt is None:
                 raise ValueError("Either prompt or messages must be provided")
@@ -275,7 +283,7 @@ class Generation:
         
         try:
             response = litellm.completion(
-                model=f"{model_config['provider']}/{model_config['model']}",
+                model=model_id,
                 messages=messages,
                 **model_config["credentials"],
                 **kwargs,
