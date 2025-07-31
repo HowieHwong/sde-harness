@@ -68,12 +68,12 @@ def retrive_tmc_from_message(message: str, expected_returns: int = 1) -> List[st
     for i in range(expected_returns):
         try:
             idx = -expected_returns + i
-            match = re.search(pattern, message_parts[idx])
-
-            if match:
-                tmc = match.group()
+            match = re.finditer(pattern, message_parts[idx])
+            for m in match:
+                tmc = m.group()
                 if len(tmc.split("_")) == 5:  # Validate TMC format
                     tmcs.append(tmc)
+                    print("tmc: "+str(tmc))
                 else:
                     print(f"Invalid TMC format: {tmc}")
 
