@@ -1,0 +1,381 @@
+no change     /pkgs/anaconda39/condabin/conda
+no change     /pkgs/anaconda39/bin/conda
+no change     /pkgs/anaconda39/bin/conda-env
+no change     /pkgs/anaconda39/bin/activate
+no change     /pkgs/anaconda39/bin/deactivate
+no change     /pkgs/anaconda39/etc/profile.d/conda.sh
+no change     /pkgs/anaconda39/etc/fish/conf.d/conda.fish
+no change     /pkgs/anaconda39/shell/condabin/Conda.psm1
+no change     /pkgs/anaconda39/shell/condabin/conda-hook.ps1
+no change     /pkgs/anaconda39/lib/python3.9/site-packages/xontrib/conda.xsh
+no change     /pkgs/anaconda39/etc/profile.d/conda.csh
+no change     /h/mskrt/.bashrc
+No action taken.
+[2024-04-08 21:45:12,167] [INFO] [real_accelerator.py:191:get_accelerator] Setting ds_accelerator to cuda (auto detect)
+Namespace(CL_neg_samples=1, JK='last', MegaMolBART_generation_model_dir='../data/pretrained_MegaMolBART/checkpoints', MoleculeSTM_lr=0.01, MoleculeSTM_model_dir='/scratch/ssd004/scratch/mskrt/huggingface_models/MoleculeSTM/demo/demo_checkpoints_SMILES', MoleculeSTM_molecule_type='SMILES', SSL_emb_dim=256, SSL_loss='RR', T=0.1, batch_size=256, dataset='ZINC250K', dataspace_path='/scratch/ssd004/scratch/mskrt/datasets/', decay=0, device=0, dropout_ratio=0.5, epochs=100, generation_lr=0.01, generation_model='MegaMolBART', gnn_emb_dim=300, gnn_type='gin', graph_pooling='mean', normalize=False, num_layer=5, num_workers=8, output_model_dir='/scratch/ssd004/scratch/mskrt/huggingface_models/MoleculeSTM/demo/demo_checkpoints_SMILES/molecule_editing_100e', seed=42, verbose=1, vocab_path='../bart_vocab.txt')
+using world size: 1 and model-parallel size: 1 
+using torch.float32 for parameters ...
+-------------------- arguments --------------------
+  adam_beta1 ...................... 0.9
+  adam_beta2 ...................... 0.999
+  adam_eps ........................ 1e-08
+  adlr_autoresume ................. False
+  adlr_autoresume_interval ........ 1000
+  apply_query_key_layer_scaling ... False
+  apply_residual_connection_post_layernorm  False
+  attention_dropout ............... 0.1
+  attention_softmax_in_fp32 ....... False
+  batch_size ...................... None
+  bert_load ....................... None
+  bias_dropout_fusion ............. False
+  bias_gelu_fusion ................ False
+  block_data_path ................. None
+  checkpoint_activations .......... False
+  checkpoint_in_cpu ............... False
+  checkpoint_num_layers ........... 1
+  clip_grad ....................... 1.0
+  contigious_checkpointing ........ False
+  cpu_optimizer ................... False
+  cpu_torch_adam .................. False
+  data_impl ....................... infer
+  data_path ....................... None
+  dataset_path .................... None
+  DDP_impl ........................ local
+  deepscale ....................... False
+  deepscale_config ................ None
+  deepspeed ....................... False
+  deepspeed_activation_checkpointing  False
+  deepspeed_config ................ None
+  distribute_checkpointed_activations  False
+  distributed_backend ............. nccl
+  dynamic_loss_scale .............. True
+  eod_mask_loss ................... False
+  eval_interval ................... 1000
+  eval_iters ...................... 100
+  exit_interval ................... None
+  faiss_use_gpu ................... False
+  finetune ........................ False
+  fp16 ............................ False
+  fp16_lm_cross_entropy ........... False
+  fp32_allreduce .................. False
+  gas ............................. 1
+  hidden_dropout .................. 0.1
+  hidden_size ..................... 256
+  hysteresis ...................... 2
+  ict_head_size ................... None
+  ict_load ........................ None
+  indexer_batch_size .............. 128
+  indexer_log_interval ............ 1000
+  init_method_std ................. 0.02
+  layernorm_epsilon ............... 1e-05
+  lazy_mpu_init ................... None
+  load ............................ ../data/pretrained_MegaMolBART/checkpoints
+  local_rank ...................... None
+  log_interval .................... 100
+  loss_scale ...................... None
+  loss_scale_window ............... 1000
+  lr .............................. None
+  lr_decay_iters .................. None
+  lr_decay_style .................. linear
+  make_vocab_size_divisible_by .... 128
+  mask_prob ....................... 0.15
+  max_position_embeddings ......... 512
+  merge_file ...................... None
+  min_lr .......................... 0.0
+  min_scale ....................... 1
+  mmap_warmup ..................... False
+  model_parallel_size ............. 1
+  no_load_optim ................... False
+  no_load_rng ..................... False
+  no_save_optim ................... False
+  no_save_rng ..................... False
+  num_attention_heads ............. 8
+  num_layers ...................... 4
+  num_unique_layers ............... None
+  num_workers ..................... 2
+  onnx_safe ....................... None
+  openai_gelu ..................... False
+  override_lr_scheduler ........... False
+  param_sharing_style ............. grouped
+  params_dtype .................... torch.float32
+  partition_activations ........... False
+  pipe_parallel_size .............. 0
+  profile_backward ................ False
+  query_in_block_prob ............. 0.1
+  rank ............................ 0
+  report_topk_accuracies .......... []
+  reset_attention_mask ............ False
+  reset_position_ids .............. False
+  save ............................ None
+  save_interval ................... None
+  scaled_masked_softmax_fusion .... False
+  scaled_upper_triang_masked_softmax_fusion  False
+  seed ............................ 1234
+  seq_length ...................... None
+  short_seq_prob .................. 0.1
+  split ........................... 969, 30, 1
+  synchronize_each_layer .......... False
+  tensorboard_dir ................. None
+  titles_data_path ................ None
+  tokenizer_type .................. GPT2BPETokenizer
+  train_iters ..................... None
+  use_checkpoint_lr_scheduler ..... False
+  use_cpu_initialization .......... False
+  use_one_sent_docs ............... False
+  vocab_file ...................... ../bart_vocab.txt
+  warmup .......................... 0.01
+  weight_decay .................... 0.01
+  world_size ...................... 1
+  zero_allgather_bucket_size ...... 0.0
+  zero_contigious_gradients ....... False
+  zero_reduce_bucket_size ......... 0.0
+  zero_reduce_scatter ............. False
+  zero_stage ...................... 1.0
+---------------- end of arguments ----------------
+> initializing torch distributed ...
+> initializing model parallel with size 1
+> setting random seeds to 1234 ...
+> initializing model parallel cuda seeds on global rank 0, model parallel rank 0, and data parallel rank 0 with model parallel seed: 3952 and data parallel seed: 1234
+Loading vocab from ../bart_vocab.txt.
+Loading from ../data/pretrained_MegaMolBART/checkpoints
+WARNING: could not find the metadata file ../data/pretrained_MegaMolBART/checkpoints/latest_checkpointed_iteration.txt 
+    will not load any checkpoints and will start from random
+Loading from pretrained MegaMolBART (../data/pretrained_MegaMolBART/checkpoints).
+Loading from /scratch/ssd004/scratch/mskrt/huggingface_models/MoleculeSTM/demo/demo_checkpoints_SMILES/molecule_model.pth...
+Loading from /scratch/ssd004/scratch/mskrt/huggingface_models/MoleculeSTM/demo/demo_checkpoints_SMILES/mol2latent_model.pth...
+Epoch 1
+save model with loss: 0.61504
+SSL Loss: 0.61504	SSL Acc: 0.00000	Time: 93.75447
+Epoch 2
+save model with loss: 0.42879
+SSL Loss: 0.42879	SSL Acc: 0.00000	Time: 93.13214
+Epoch 3
+save model with loss: 0.39549
+SSL Loss: 0.39549	SSL Acc: 0.00000	Time: 92.95728
+Epoch 4
+SSL Loss: 2.52291	SSL Acc: 0.00000	Time: 93.16338
+Epoch 5
+SSL Loss: 0.61935	SSL Acc: 0.00000	Time: 92.65282
+Epoch 6
+SSL Loss: 0.40104	SSL Acc: 0.00000	Time: 92.90512
+Epoch 7
+SSL Loss: 0.47464	SSL Acc: 0.00000	Time: 91.93989
+Epoch 8
+save model with loss: 0.38685
+SSL Loss: 0.38685	SSL Acc: 0.00000	Time: 91.70897
+Epoch 9
+SSL Loss: 1.21059	SSL Acc: 0.00000	Time: 93.13510
+Epoch 10
+SSL Loss: 1.69583	SSL Acc: 0.00000	Time: 91.51406
+Epoch 11
+SSL Loss: 0.40541	SSL Acc: 0.00000	Time: 91.77134
+Epoch 12
+SSL Loss: 0.63387	SSL Acc: 0.00000	Time: 91.55244
+Epoch 13
+save model with loss: 0.34924
+SSL Loss: 0.34924	SSL Acc: 0.00000	Time: 91.70773
+Epoch 14
+SSL Loss: 0.38751	SSL Acc: 0.00000	Time: 91.75751
+Epoch 15
+SSL Loss: 0.35787	SSL Acc: 0.00000	Time: 91.96348
+Epoch 16
+SSL Loss: 0.58837	SSL Acc: 0.00000	Time: 91.71173
+Epoch 17
+SSL Loss: 0.65160	SSL Acc: 0.00000	Time: 91.68159
+Epoch 18
+SSL Loss: 0.42528	SSL Acc: 0.00000	Time: 91.76923
+Epoch 19
+save model with loss: 0.34113
+SSL Loss: 0.34113	SSL Acc: 0.00000	Time: 93.42449
+Epoch 20
+SSL Loss: 0.44683	SSL Acc: 0.00000	Time: 91.97423
+Epoch 21
+SSL Loss: 0.38184	SSL Acc: 0.00000	Time: 91.72778
+Epoch 22
+SSL Loss: 0.40130	SSL Acc: 0.00000	Time: 91.95552
+Epoch 23
+SSL Loss: 0.36272	SSL Acc: 0.00000	Time: 91.89372
+Epoch 24
+save model with loss: 0.31779
+SSL Loss: 0.31779	SSL Acc: 0.00000	Time: 91.64900
+Epoch 25
+SSL Loss: 0.51617	SSL Acc: 0.00000	Time: 91.64518
+Epoch 26
+SSL Loss: 0.59482	SSL Acc: 0.00000	Time: 91.76532
+Epoch 27
+SSL Loss: 0.35067	SSL Acc: 0.00000	Time: 91.96267
+Epoch 28
+SSL Loss: 0.51180	SSL Acc: 0.00000	Time: 91.82340
+Epoch 29
+SSL Loss: 0.36709	SSL Acc: 0.00000	Time: 93.33762
+Epoch 30
+SSL Loss: 0.32425	SSL Acc: 0.00000	Time: 92.03963
+Epoch 31
+save model with loss: 0.30541
+SSL Loss: 0.30541	SSL Acc: 0.00000	Time: 92.12230
+Epoch 32
+SSL Loss: 0.31024	SSL Acc: 0.00000	Time: 92.09310
+Epoch 33
+SSL Loss: 0.38239	SSL Acc: 0.00000	Time: 91.81538
+Epoch 34
+SSL Loss: 0.40259	SSL Acc: 0.00000	Time: 91.78064
+Epoch 35
+SSL Loss: 0.47546	SSL Acc: 0.00000	Time: 91.97106
+Epoch 36
+SSL Loss: 0.30934	SSL Acc: 0.00000	Time: 91.72133
+Epoch 37
+save model with loss: 0.30301
+SSL Loss: 0.30301	SSL Acc: 0.00000	Time: 91.80775
+Epoch 38
+SSL Loss: 0.30889	SSL Acc: 0.00000	Time: 91.94359
+Epoch 39
+save model with loss: 0.30099
+SSL Loss: 0.30099	SSL Acc: 0.00000	Time: 93.49587
+Epoch 40
+SSL Loss: 0.31037	SSL Acc: 0.00000	Time: 91.74225
+Epoch 41
+SSL Loss: 0.31558	SSL Acc: 0.00000	Time: 92.32079
+Epoch 42
+SSL Loss: 0.34040	SSL Acc: 0.00000	Time: 91.68836
+Epoch 43
+SSL Loss: 0.30216	SSL Acc: 0.00000	Time: 91.74034
+Epoch 44
+SSL Loss: 0.30437	SSL Acc: 0.00000	Time: 91.96742
+Epoch 45
+SSL Loss: 0.32243	SSL Acc: 0.00000	Time: 91.60800
+Epoch 46
+SSL Loss: 0.31161	SSL Acc: 0.00000	Time: 91.90261
+Epoch 47
+SSL Loss: 0.30473	SSL Acc: 0.00000	Time: 92.14401
+Epoch 48
+save model with loss: 0.29435
+SSL Loss: 0.29435	SSL Acc: 0.00000	Time: 91.85349
+Epoch 49
+SSL Loss: 0.29683	SSL Acc: 0.00000	Time: 93.40770
+Epoch 50
+save model with loss: 0.29409
+SSL Loss: 0.29409	SSL Acc: 0.00000	Time: 92.58021
+Epoch 51
+SSL Loss: 0.29413	SSL Acc: 0.00000	Time: 92.01238
+Epoch 52
+save model with loss: 0.29342
+SSL Loss: 0.29342	SSL Acc: 0.00000	Time: 92.22704
+Epoch 53
+save model with loss: 0.29096
+SSL Loss: 0.29096	SSL Acc: 0.00000	Time: 92.43460
+Epoch 54
+SSL Loss: 0.29189	SSL Acc: 0.00000	Time: 92.02865
+Epoch 55
+save model with loss: 0.28939
+SSL Loss: 0.28939	SSL Acc: 0.00000	Time: 92.02314
+Epoch 56
+SSL Loss: 0.28979	SSL Acc: 0.00000	Time: 92.20884
+Epoch 57
+SSL Loss: 0.28946	SSL Acc: 0.00000	Time: 92.11540
+Epoch 58
+save model with loss: 0.28917
+SSL Loss: 0.28917	SSL Acc: 0.00000	Time: 91.80562
+Epoch 59
+save model with loss: 0.28817
+SSL Loss: 0.28817	SSL Acc: 0.00000	Time: 93.55820
+Epoch 60
+save model with loss: 0.28721
+SSL Loss: 0.28721	SSL Acc: 0.00000	Time: 91.91413
+Epoch 61
+SSL Loss: 0.28814	SSL Acc: 0.00000	Time: 91.68351
+Epoch 62
+save model with loss: 0.28715
+SSL Loss: 0.28715	SSL Acc: 0.00000	Time: 92.05380
+Epoch 63
+SSL Loss: 0.28735	SSL Acc: 0.00000	Time: 91.96991
+Epoch 64
+save model with loss: 0.28521
+SSL Loss: 0.28521	SSL Acc: 0.00000	Time: 91.75996
+Epoch 65
+SSL Loss: 0.28581	SSL Acc: 0.00000	Time: 92.48499
+Epoch 66
+SSL Loss: 0.28587	SSL Acc: 0.00000	Time: 92.42748
+Epoch 67
+SSL Loss: 0.28570	SSL Acc: 0.00000	Time: 91.68713
+Epoch 68
+save model with loss: 0.28479
+SSL Loss: 0.28479	SSL Acc: 0.00000	Time: 91.82244
+Epoch 69
+save model with loss: 0.28406
+SSL Loss: 0.28406	SSL Acc: 0.00000	Time: 93.45883
+Epoch 70
+SSL Loss: 0.28408	SSL Acc: 0.00000	Time: 91.91151
+Epoch 71
+save model with loss: 0.28355
+SSL Loss: 0.28355	SSL Acc: 0.00000	Time: 91.84225
+Epoch 72
+save model with loss: 0.28277
+SSL Loss: 0.28277	SSL Acc: 0.00000	Time: 91.98423
+Epoch 73
+SSL Loss: 0.28391	SSL Acc: 0.00000	Time: 91.65134
+Epoch 74
+save model with loss: 0.28268
+SSL Loss: 0.28268	SSL Acc: 0.00000	Time: 91.85604
+Epoch 75
+save model with loss: 0.28241
+SSL Loss: 0.28241	SSL Acc: 0.00000	Time: 92.06262
+Epoch 76
+save model with loss: 0.28200
+SSL Loss: 0.28200	SSL Acc: 0.00000	Time: 92.26114
+Epoch 77
+save model with loss: 0.28065
+SSL Loss: 0.28065	SSL Acc: 0.00000	Time: 91.87655
+Epoch 78
+SSL Loss: 0.28181	SSL Acc: 0.00000	Time: 91.92447
+Epoch 79
+SSL Loss: 0.28200	SSL Acc: 0.00000	Time: 92.98425
+Epoch 80
+SSL Loss: 0.28114	SSL Acc: 0.00000	Time: 92.39619
+Epoch 81
+SSL Loss: 0.28092	SSL Acc: 0.00000	Time: 91.78805
+Epoch 82
+SSL Loss: 0.28130	SSL Acc: 0.00000	Time: 92.18743
+Epoch 83
+save model with loss: 0.27970
+SSL Loss: 0.27970	SSL Acc: 0.00000	Time: 91.75407
+Epoch 84
+save model with loss: 0.27927
+SSL Loss: 0.27927	SSL Acc: 0.00000	Time: 92.28195
+Epoch 85
+SSL Loss: 0.28073	SSL Acc: 0.00000	Time: 91.95731
+Epoch 86
+SSL Loss: 0.27983	SSL Acc: 0.00000	Time: 91.92417
+Epoch 87
+SSL Loss: 0.27956	SSL Acc: 0.00000	Time: 92.07234
+Epoch 88
+save model with loss: 0.27915
+SSL Loss: 0.27915	SSL Acc: 0.00000	Time: 92.02737
+Epoch 89
+save model with loss: 0.27874
+SSL Loss: 0.27874	SSL Acc: 0.00000	Time: 93.74858
+Epoch 90
+SSL Loss: 0.27920	SSL Acc: 0.00000	Time: 92.12950
+Epoch 91
+save model with loss: 0.27858
+SSL Loss: 0.27858	SSL Acc: 0.00000	Time: 92.20369
+Epoch 92
+save model with loss: 0.27850
+SSL Loss: 0.27850	SSL Acc: 0.00000	Time: 92.09892
+Epoch 93
+save model with loss: 0.27813
+SSL Loss: 0.27813	SSL Acc: 0.00000	Time: 92.02037
+Epoch 94
+SSL Loss: 0.27821	SSL Acc: 0.00000	Time: 91.93227
+Epoch 95
+save model with loss: 0.27670
+SSL Loss: 0.27670	SSL Acc: 0.00000	Time: 91.98417
+Epoch 96
+SSL Loss: 0.27762	SSL Acc: 0.00000	Time: 92.05315
+Epoch 97
+SSL Loss: 0.27731	SSL Acc: 0.00000	Time: 92.09679
+Epoch 98
+SSL Loss: 0.27725	SSL Acc: 0.00000	Time: 91.65424
+Epoch 99
+SSL Loss: 0.27772	SSL Acc: 0.00000	Time: 93.28475
+Epoch 100
+SSL Loss: 0.27743	SSL Acc: 0.00000	Time: 91.91778
