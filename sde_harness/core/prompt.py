@@ -77,6 +77,46 @@ Based on the previous attempts and their scores, please improve your response:""
 Current message: {current_message}
 
 Please respond appropriately:""",
+            # --- Protein sequence optimisation template ---
+            "protein_opt": """
+            
+You are a world-class assistant specializing in protein engineering, fitness optimization, and sequence design. Your expertise lies in analyzing sequence-function relationships, interpreting experimental data, and proposing rational modifications to optimize protein fitness.<|eot_id|>
+
+You will carry out a multi-round directed evolution experiment with the following protein sequence, aimed at improving protein's ability to {task} via protein fitness optimization.
+
+### Protein fitness optimization
+The fitness score reflects the efficacy or functionality for a desired application, from chemical synthesis to bioremediation and therapeutics. Protein fitness optimization can be thought of as navigating a protein fitness landscape, a mapping of amino acid sequences to fitness values, to find higher-fitness variants. Specifically, it is achieved by making crossover and mutations on the given sequences.
+
+The provided subset protein sequences come from wild type protein: crystal structure of Ig-like C2-type 2 domain of the human Mucosa-associated lymphoid tissue lymphoma translocation protein 1, with sequence:
+```
+SKLQICVEPTSQKLMPGSTLVLQCVAVGSPIPHYQWFKNELPLTHETKKLYMVPYVDLEHQGTYWCHVYNDRDSQDSKKVEIIID
+```
+You can do mutation on every amino acid without changing the length.
+
+### Parent protein sequences
+Here are the parent protein sequences that you will be modifying from. Each sequence comes with {seq_len} amino acids and its fitness score is also provided.
+
+Protein sequence 1 (fitness score: {score1})
+```
+{protein_seq_1}
+```
+
+Protein sequence 2 (fitness score: {score2})
+```
+{protein_seq_2}
+```
+
+### Instructions
+Follow the instructions below to propose a new protein:
+* Your proposal should focus on maximizing fitness and minimizing humming distance from the wild type while considering structural and functional plausibility.
+* You can propose it via making crossover or mutation on the parent sequences.
+* You can also propose a new sequence based on your knowledge.
+* Your proposed sequence MUST have the same length as the parent sequences.
+* DO NOT propose sequence that is identical with the parent or the wild type sequences. 
+* Your output MUST ONLY inclue: \\box{{$Protein}}, where the $Protein is a string of amino acids. 
+* The recent pool have mean fitness as {mean}, stander deviation as {std}.
+* DO NOT explain.
+""",
         }
 
     def add_vars(self, **kwargs) -> None:
