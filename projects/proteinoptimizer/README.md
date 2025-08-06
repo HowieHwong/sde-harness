@@ -1,10 +1,7 @@
-# ProteinOptimizer (Syn-3bfo)
+# ProteinOptimizer 
 
-ProteinOptimizer is a lightweight, **Weave-tracked** genetic–algorithm framework for
-optimising fixed-length protein sequences.  It is a direct, self-contained
-re-implementation of the relevant parts of the original **LLMProteinOptimizer**
-project, refactored to live exclusively inside the `sde-harness` codebase and
-stripped of all molecule/SMILES logic.
+ProteinOptimizer is a framework for optimizing protein sequences using large language models (LLMs) and evolutionary algorithms. This project combines the power of state-of-the-art language models with traditional optimization techniques to improve protein properties.  It is a direct, self-contained re-implementation of the relevant parts of the original **LLMProteinOptimizer**
+project, refactored to live exclusively inside the `sde-harness` codebase.
 
 The default benchmark bundled with the repository is **Syn-3bfo** – a fitness
 landscape derived from the _Streptomyces peptidase_ (PDB **3BFO**).  Two types
@@ -121,3 +118,15 @@ the `data/` folder.
 ## License
 This refactor inherits the original Apache 2.0 license for the Potts model code
 and follows the MIT license of SDE-Harness.  See the root `LICENSE` file.
+
+## Citation
+
+If you find this work useful, please cite our paper:
+
+```
+@article{wang2025large,
+  title={Large Language Model is Secretly a Protein Sequence Optimizer},
+  author={Wang, Yinkai and He, Jiaxing and Du, Yuanqi and Chen, Xiaohui and Li, Jianan Canal and Liu, Li-Ping and Xu, Xiaolin and Hassoun, Soha},
+  journal={arXiv preprint arXiv:2501.09274},
+  year={2025}
+}
