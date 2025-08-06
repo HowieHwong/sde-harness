@@ -1,5 +1,7 @@
 # ProteinOptimizer 
-
+<p align="center" style="width:90%;margin:0 auto;">
+  <img src="assets/protein_main.pdf" alt="Framework" style="width:100%;max-width:1200px;min-width:300px;display:block;margin:0 auto;"/>
+</p>
 ProteinOptimizer is a framework for optimizing protein sequences using large language models (LLMs) and evolutionary algorithms. This project combines the power of state-of-the-art language models with traditional optimization techniques to improve protein properties.  It is a direct, self-contained re-implementation of the relevant parts of the original **LLMProteinOptimizer**
 project, refactored to live exclusively inside the `sde-harness` codebase.
 
