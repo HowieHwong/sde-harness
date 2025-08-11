@@ -1,0 +1,13 @@
+# Core dependencies for ChatMOF optimization framework
+pandas>=1.5.0
+numpy>=1.20.0
+openpyxl>=3.0.0
+
+# sde_harness framework dependencies (should already be installed)
+# weave
+# litellm
+# transformers
+# torch
+
+# Optional: for better regex processing
+regex>=2022.0.0
