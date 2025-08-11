@@ -49,7 +49,7 @@ The fitness score of Syn-3bfo is not bounded.
 
 ```bash
 # Optimize for AAV fitness using the ML model
-python cli.py single --oracle gfp --generations 10 --population-size 50 --offspring-size 10
+python cli.py single --oracle aav --generations 10 --population-size 50 --offspring-size 10 --model "openai/gpt-4o-2024-08-06"
 ```
 
 ### 2. Multi-objective (weighted sum)
@@ -63,10 +63,10 @@ The final score is a weighted sum: `(fitness_weight * Fitness) + (hamming_weight
 
 ```bash
 # Weighted-sum multi-objective with GB1
-python cli.py multi --oracle gb1 --generations 10 --fitness-weight 1.0 --hamming-weight -0.2
+python cli.py multi --oracle gb1 --generations 10 --fitness-weight 1.0 --hamming-weight -0.2 --model "openai/gpt-4o-2024-08-06"
 
 # Weighted-sum multi-objective with Syn-3bfo (will use Potts model automatically)
-python cli.py multi --oracle syn-3bfo --generations 10 --fitness-weight 1.0 --hamming-weight -0.2
+python cli.py multi --oracle syn-3bfo --generations 10 --fitness-weight 1.0 --hamming-weight -0.2 --model "openai/gpt-4o-2024-08-06"
 ```
 
 ### 3. Multi-objective (Pareto)
@@ -75,12 +75,12 @@ This mode doesn't use weights. Instead, it finds the set of "non-dominated" solu
 
 ```bash
 # Pareto front with TrpB
-python cli.py multi-pareto --oracle trpb --generations 20
+python cli.py multi-pareto --oracle trpb --generations 20 --model "openai/gpt-4o-2024-08-06"
 ```
 
 ### 4. SDE-Harness Workflow
 ```bash
-python cli.py workflow --generations 3 --model "openai/gpt-4o-2024-08-06" --oracle gb1
+python cli.py workflow --generations 3 --model "openai/gpt-4o-2024-08-06" --oracle gb1 --model "openai/gpt-4o-2024-08-06"
 ```
 
 Logs & artefacts can be inspected in the Weave UI under
