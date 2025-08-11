@@ -1,75 +1,49 @@
 """Base oracle class for molecular property evaluation"""
 
-from abc import ABC, abstractmethod
-from typing import List, Dict, Any
-import sys
-import os
-
-# Add SDE harness to path
-project_root = os.path.dirname(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-)
-sys.path.insert(0, project_root)
+from __future__ import annotations
+from abc import abstractmethod
+from typing import Any
 
 from sde_harness.core import Oracle
 
-
 class ProteinOracle(Oracle):
-    """Base class for molecular property oracles"""
-    
-    def __init__(self, property_name: str):
+    """
+    Base class for all protein oracles in this project. It inherits from the
+    SDE Harness Oracle to be compatible with the Workflow system, and adds
+    protein-specific evaluation logic.
+    """
+    def __init__(self):
         super().__init__()
-        self.property_name = property_name
         self.call_count = 0
         self.history = []
-        
+
     def evaluate_protein(self, sequence: str) -> float:
-        """Evaluate a single protein sequence"""
+        """
+        Public method to evaluate a protein sequence. It increments the call
+        counter and then calls the specific implementation.
+        """
         score = self._evaluate_protein_impl(sequence)
         self.call_count += 1
-        self.history.append({
-            "input": sequence,
-            "score": score,
-            "call_count": self.call_count
-        })
+        self.history.append({"input": sequence, "score": score, "call_count": self.call_count})
         return score
-    
-    @abstractmethod
-    def _evaluate_protein_impl(self, sequence: str) -> float:
-        """Implementation of protein sequence evaluation (to be overridden)"""
-        pass
-        
+
     def evaluate(self, response: Any, reference: Any = None) -> float:
         """
-        Evaluate response from generation model
-        
-        Args:
-            response: SMILES string or list of SMILES
-            reference: Optional reference data
-            
-        Returns:
-            Score (float)
+        SDE-Harness compatible evaluate method. The workflow calls this method.
+        It expects the response to be a dictionary containing the sequence.
         """
-        if isinstance(response, str):
-            # Single protein sequence
-            score = self.evaluate_protein(response)
-        elif isinstance(response, list):
-            # List of protein sequences - return average
-            scores = [self.evaluate_protein(seq) for seq in response]
-            score = sum(scores) / len(scores) if scores else 0.0
+        if isinstance(response, dict) and "text" in response:
+            sequence = response["text"]
+        elif isinstance(response, str):
+            sequence = response
         else:
-            raise ValueError(f"Unsupported response type: {type(response)}")
-            
-        self.call_count += 1
-        self.history.append({
-            "input": response,
-            "score": score,
-            "call_count": self.call_count
-        })
+            raise TypeError(f"Unsupported response type for oracle evaluation: {type(response)}")
         
-        return score
-        
-    def reset(self):
-        """Reset oracle state"""
-        self.call_count = 0
-        self.history = []
+        return self.evaluate_protein(sequence)
+
+    @abstractmethod
+    def _evaluate_protein_impl(self, sequence: str) -> float:
+        """
+        Subclasses must implement this method to define their evaluation logic.
+        """
+        raise NotImplementedError

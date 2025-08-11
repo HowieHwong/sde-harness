@@ -5,81 +5,82 @@
 ProteinOptimizer is a framework for optimizing protein sequences using large language models (LLMs) and evolutionary algorithms. This project combines the power of state-of-the-art language models with traditional optimization techniques to improve protein properties.  It is a direct, self-contained re-implementation of the relevant parts of the original **LLMProteinOptimizer**
 project, refactored to live exclusively inside the `sde-harness` codebase.
 
-The default benchmark bundled with the repository is **Syn-3bfo** – a fitness
-landscape derived from the _Streptomyces peptidase_ (PDB **3BFO**).  Two types
-of optimisation are supported:
+This project is an adaptation of the Mol-LLeo framework for protein sequence optimization. It uses a genetic algorithm (GA) to evolve populations of protein sequences towards desired objectives. It supports both single-objective and multi-objective optimization, with optional LLM-guided mutations.
 
-* **Single-objective** – maximise the Syn-3bfo fitness score.
-* **Multi-objective** –
-  * Weighted-sum aggregation (user-provided weights)
-  * Pareto front (non-dominated selection)
-
-All optimisation runs stream metadata to [Weave](https://wandb.ai/site/weave/)
-for convenient experiment tracking.
-
----
-## Installation
-```bash
-# create env (example — choose your own manager)
-conda create -n proteinopt python=3.10
-conda activate proteinopt
-
-# install requirements for the project itself
-pip install -r projects/proteinoptimizer/requirements.txt
-
-# add optional extras (Weave tracking)
-pip install weave
-```
-
-The code uses nothing outside the standard Python scientific stack
-(`numpy, pandas, scipy`) plus `weave` for logging.
+## Supported Datasets / Oracles
+* **Syn-3bfo**: A synthetic protein fitness landscape. Includes a Potts model for energy-based evaluation. The fitness score is unbounded.
+* **GB1**: Protein G domain B1, with fitness data. Fitness range: [0, 8.76].
+* **TrpB**: Tryptophan synthase, with fitness data. Fitness range: [0, 1].
+* **AAV**: AAV2 Capsid protein, with fitness predicted by a pre-trained ML model.
+* **GFP**: Green Fluorescent Protein, with fitness predicted by a pre-trained ML model.
 
 ---
 ## Dataset placement
+The project expects the following file structure for data and ML models. The `GGS_utils` directory contains the necessary checkpoints for the `AAV` and `GFP` oracles.
+
 ```
 projects/
 └─ proteinoptimizer/
    ├─ data/
-   │  └─ Syn-3bfo/
-   │     ├─ fitness.csv            # <— required (159 KB)
-   │     └─ 3bfo_1_A_model_state_dict.npz  # optional Potts landscape (11 MB)
+   │  ├─ Syn-3bfo/
+   │  │  ├─ fitness.csv
+   │  │  └─ 3bfo_1_A_model_state_dict.npz
+   │  ├─ GB1/
+   │  │  └─ fitness.csv
+   │  ├─ TrpB/
+   │  │  └─ fitness.csv
+   │  ├─ AAV/
+   │  │  └─ *.csv
+   │  └─ GFP/
+   │     └─ *.csv
+   ├─ src/
+   │  └─ utils/
+   │     └─ GGS_utils/  # <— required for AAV and GFP oracles
+   │        ├─ ckpt/
+   │        └─ ...
    └─ ...
 ```
-* `fitness.csv` – ground-truth experimental scores (columns `Combo, fitness`).
-* `*.npz` – direct-coupling Potts model exported from Mogwai (optional, speeds up
-  evaluation & generalises outside the CSV lookup).
+The fitness score of Syn-3bfo is not bounded.
 
 ---
 ## Quick start
 
 ### 1. Single-objective
+
 ```bash
-python cli.py single \
-       --generations 10 \
-       --population-size 100 \
-       --offspring-size 200 \
-       --mutation-rate 0.02 \
-       --seed 0
-       --model "openai/gpt-4o-2024-08-06"  # optional LLM
+# Optimize for AAV fitness using the ML model
+python cli.py single --oracle gfp --generations 10 --population-size 50 --offspring-size 10
 ```
 
 ### 2. Multi-objective (weighted sum)
+
+This mode optimizes a combined score of two competing objectives:
+
+*   **Fitness Score:** The score from the selected oracle (e.g., experimental fitness from the CSV or predicted Potts energy). A *higher* score is better.
+*   **Hamming Distance:** The number of mutations between a sequence and a reference (wild-type). A *lower* distance means the sequence is more similar to the original.
+
+The final score is a weighted sum: `(fitness_weight * Fitness) + (hamming_weight * Hamming Distance)`.
+
 ```bash
-# maximise +1 * fitness  –  minimise 0.5 * fitness (demo)
-python cli.py multi \
-       --potts-weight 1.0 --hamming-weight -0.1 \
-       --generations 8
+# Weighted-sum multi-objective with GB1
+python cli.py multi --oracle gb1 --generations 10 --fitness-weight 1.0 --hamming-weight -0.2
+
+# Weighted-sum multi-objective with Syn-3bfo (will use Potts model automatically)
+python cli.py multi --oracle syn-3bfo --generations 10 --fitness-weight 1.0 --hamming-weight -0.2
 ```
 
 ### 3. Multi-objective (Pareto)
+
+This mode doesn't use weights. Instead, it finds the set of "non-dominated" solutions (the Pareto front). It simultaneously tries to maximize the fitness/Potts score and minimize the Hamming distance.
+
 ```bash
-python cli.py multi-pareto \
-       --generations 8
+# Pareto front with TrpB
+python cli.py multi-pareto --oracle trpb --generations 20
 ```
 
 ### 4. SDE-Harness Workflow
 ```bash
-python cli.py workflow --generations 3
+python cli.py workflow --generations 3 --model "openai/gpt-4o-2024-08-06" --oracle gb1
 ```
 
 Logs & artefacts can be inspected in the Weave UI under
@@ -132,3 +133,5 @@ If you find this work useful, please cite our paper:
   journal={arXiv preprint arXiv:2501.09274},
   year={2025}
 }
+
+```

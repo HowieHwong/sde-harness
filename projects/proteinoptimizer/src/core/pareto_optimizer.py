@@ -6,6 +6,8 @@ import random, numpy as np
 from .protein_optimizer import ProteinOptimizer
 from .pareto import non_dominated_sort
 
+AMINO_ACIDS = list("ACDEFGHIKLMNPQRSTVWY")
+
 
 class ParetoOptimizer(ProteinOptimizer):
     """Genetic algorithm that keeps non-dominated front (NSGA-II simplified)."""
@@ -44,14 +46,12 @@ class ParetoOptimizer(ProteinOptimizer):
         offspring, offspring_scores = [], []
         for _ in range(self.offspring_size // 2):
             p1, p2 = np.random.choice(len(self.population), 2, replace=True, p=probs)
-            c1, c2 = self._crossover(self.population[p1], self.population[p2])
-            c1, c2 = self._random_mutate(c1), self._random_mutate(c2)
-            for c in [c1, c2]:
-                if c not in self.all_results:
-                    sc = self._eval_sequence(c)
-                    offspring.append(c)
-                    offspring_scores.append(sc)
-                    self.all_results[c] = sc
+            child1 = self._llm_mutate(seq=self.population[p1]) if self.use_llm_mutations else self._random_mutate(seq=self.population[p1])
+            if child1 not in self.all_results:
+                sc = self._eval_sequence(seq=child1)
+                offspring.append(child1)
+                offspring_scores.append(sc)
+                self.all_results[child1] = sc
         # combine
         all_seq = self.population + offspring
         all_scores = self.scores + offspring_scores
@@ -93,3 +93,81 @@ class ParetoOptimizer(ProteinOptimizer):
             "final_population": list(zip(self.population, self.scores)),
             "all_results": self.all_results,
         } 
+    def _llm_mutate(self, seq: str, k: int = 5) -> str:
+        """Use LLM to suggest a mutant; fall back to random if fails."""
+        if not self.use_llm_mutations:
+            return self._random_mutate(seq)
+
+        prompt = (
+            None  # will be built via Prompt below
+        )
+        # Build prompt
+        from sde_harness.core.prompt import Prompt
+        # Choose two random parents from population if available
+        import random, statistics
+        if len(self.population) >= 2:
+            idx_a, idx_b = random.sample(range(len(self.population)), 2)
+            parent_a = self.population[idx_a]
+            parent_b = self.population[idx_b]
+            score_a = self.scores[idx_a]
+            score_b = self.scores[idx_b]
+        else:
+            parent_a = parent_b = seq
+            score_a = score_b = self.oracle.evaluate_molecule(seq)
+
+        prompt_obj = Prompt(template_name="protein_opt", default_vars=dict(
+            task="maximise fitness",
+            seq_len=len(seq),
+            score1=score_a,
+            score2=score_b,
+            protein_seq_1=parent_a,
+            protein_seq_2=parent_b,
+            mean=0.0,
+            std=0.0
+        ))
+
+        prompt = prompt_obj.build()
+
+        try:
+            retry_count = 0
+            max_retries = 5
+            generated_sequence = None
+
+            while retry_count < max_retries:
+                response = self.generator.generate(
+                    prompt=prompt,
+                    model_name=self.model_name,
+                    temperature=0.8,
+                    max_tokens=len(seq) + 50,  # More room for box etc.
+                )
+                text = response["text"].strip()
+
+                # 1. Look for \box{SEQUENCE}
+                import re
+                match = re.search(r'\\box\{(.*?)\}', text)
+                if match:
+                    candidate = match.group(1).replace(' ', '')
+                    if len(candidate) == len(seq) and all(c in AMINO_ACIDS for c in candidate):
+                        generated_sequence = candidate
+                        break
+
+                # 2. Fallback to parsing raw lines
+                for line in text.split('\n'):
+                    candidate = line.strip().upper()
+                    if len(candidate) == len(seq) and all(c in AMINO_ACIDS for c in candidate):
+                        generated_sequence = candidate
+                        break
+                if generated_sequence:
+                    break
+                retry_count += 1
+
+            if generated_sequence:
+                return generated_sequence
+
+        except Exception:
+            pass
+        # fallback
+        # If all LLM attempts fail, use crossover + mutation
+        parent_a, parent_b = prompt_obj.default_vars["protein_seq_1"], prompt_obj.default_vars["protein_seq_2"]
+        child = self._crossover(parent_a, parent_b)[0]
+        return self._random_mutate(child) 

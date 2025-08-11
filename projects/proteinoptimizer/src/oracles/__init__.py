@@ -1,9 +1,15 @@
 """Oracle functions for molecular property evaluation"""
 
-from .base import ProteinOracle
-from .protein_oracles import Syn3bfoOracle
+from .fitness_oracles import GB1Oracle, TrpBOracle, Syn3bfoOracle
+from .multi_objective_oracles import HammingDistanceOracle, PottsObjective
+from .ml_oracles import AAVOracle, GFPOracle
 
 __all__ = [
-    "ProteinOracle",
-    "Syn3bfoOracle"
+    "GB1Oracle",
+    "TrpBOracle",
+    "Syn3bfoOracle",
+    "AAVOracle",
+    "GFPOracle",
+    "HammingDistanceOracle",
+    "PottsObjective",
 ]

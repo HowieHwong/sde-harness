@@ -42,13 +42,13 @@ Example usage:
         "--population-size", 
         type=int, 
         default=10,
-        help="Population size (default: 100)"
+        help="Population size (default: 10)"
     )
     common_args.add_argument(
         "--offspring-size",
         type=int,
         default=20,
-        help="Offspring per generation (default: 200)"
+        help="Offspring per generation (default: 20)"
     )
     common_args.add_argument(
         "--generations",
@@ -82,6 +82,9 @@ Example usage:
         help="Output directory for results (default: results)"
     )
 
+    # Oracle choices
+    oracle_choices = ['syn-3bfo', 'gb1', 'trpb', 'aav', 'gfp']
+
     # Single objective mode (inherits common args)
     single_parser = subparsers.add_parser(
         "single",
@@ -92,7 +95,7 @@ Example usage:
         "--oracle",
         type=str,
         default="syn-3bfo",
-        choices=['syn-3bfo'],
+        choices=oracle_choices,
         help="Oracle to use for optimization",
     )
 
@@ -102,7 +105,14 @@ Example usage:
         parents=[common_args],
         help="Multi-objective optimization (weighted sum)",
     )
-    multi_parser.add_argument("--potts-weight", type=float, default=1.0, help="Weight for Potts energy (maximise)")
+    multi_parser.add_argument(
+        "--oracle",
+        type=str,
+        default="syn-3bfo",
+        choices=oracle_choices,
+        help="Oracle to use for optimization.",
+    )
+    multi_parser.add_argument("--fitness-weight", type=float, default=1.0, help="Weight for fitness/Potts energy (maximise)")
     multi_parser.add_argument("--hamming-weight", type=float, default=-0.1, help="Weight for Hamming distance (minimise)")
 
     # Pareto mode
@@ -111,6 +121,13 @@ Example usage:
         parents=[common_args],
         help="Multi-objective optimization with Pareto selection",
     )
+    pareto_parser.add_argument(
+        "--oracle",
+        type=str,
+        default="syn-3bfo",
+        choices=oracle_choices,
+        help="Oracle to use for optimization.",
+    )
     # No specific args for pareto, it will use potts + hamming
 
     # Workflow mode
@@ -118,6 +135,13 @@ Example usage:
         "workflow",
         parents=[common_args],
         help="Run GA inside SDE-Harness Workflow",
+    )
+    workflow_parser.add_argument(
+        "--oracle",
+        type=str,
+        default="syn-3bfo",
+        choices=oracle_choices,
+        help="Oracle to use for the workflow",
     )
 
     # Parse arguments
@@ -146,6 +170,9 @@ Example usage:
                 run_single_objective(args)
             elif args.mode == "multi":
                 from src.modes.multi_objective_protein import run_multi_objective
+                # Rename potts_weight to fitness_weight for the function call
+                if 'potts_weight' in args:
+                    args.fitness_weight = args.potts_weight
                 run_multi_objective(args)
             elif args.mode == "multi-pareto":
                 from src.modes.multi_pareto_protein import run_multi_pareto
@@ -158,7 +185,7 @@ Example usage:
                     k: v for k, v in vars(args).items()
                     if k in ["population_size", "offspring_size", "generations", "mutation_rate", "initial_size"]
                 }
-                flow = ProteinWorkflow(model_name=args.model, **ga_params)
+                flow = ProteinWorkflow(oracle_name=args.oracle, model_name=args.model, **ga_params)
                 # Dummy prompt, workflow runs GA
                 from sde_harness.core import Prompt
                 prompt = Prompt(template_name="protein_opt", default_vars={"task":"N/A", "seq_len":0, "score1":0, "score2":0, "protein_seq_1":"-", "protein_seq_2":"-", "mean":0, "std":0})

@@ -2,6 +2,7 @@
 
 import sys
 import os
+import time
 from typing import Dict, Any, List
 import weave
 
@@ -12,8 +13,8 @@ project_root = os.path.dirname(
 sys.path.insert(0, project_root)
 
 # No Workflow needed for sequence GA
-from ..core import ProteinOptimizer
-from ..oracles import Syn3bfoOracle
+from src.core import ProteinOptimizer
+from src.oracles import Syn3bfoOracle, GB1Oracle, TrpBOracle, AAVOracle, GFPOracle
 
 
 def run_single_objective(args) -> Dict[str, Any]:
@@ -33,27 +34,41 @@ def run_single_objective(args) -> Dict[str, Any]:
     Returns:
         Optimization results
     """
+    # Weave setup
+    weave.init(project_name="sde-harness-protein_singleobj")
+
     print(f"Running single objective optimization for {args.oracle}...")
     
-    # Initialize Weave for tracking
-    weave.init(f"proteinopt_single_{args.oracle}")
+    # Setup
+    os.makedirs(args.output_dir, exist_ok=True)
     
-    # Currently only Syn-3bfo oracle is supported in this mode
-    if args.oracle != 'syn-3bfo':
-        raise ValueError("Only 'syn-3bfo' oracle is supported in this version.")
-
-    oracle = Syn3bfoOracle()
-    
-    # Get initial sequences
-    initial_sequences = []
-    
-    # Sample initial sequences
-    if hasattr(args, 'initial_sequences') and args.initial_sequences:
-        initial_sequences = args.initial_sequences
+    # Select oracle
+    if args.oracle == 'syn-3bfo':
+        oracle = Syn3bfoOracle()
+    elif args.oracle == 'gb1':
+        oracle = GB1Oracle()
+    elif args.oracle == 'trpb':
+        oracle = TrpBOracle()
+    elif args.oracle == 'aav':
+        oracle = AAVOracle()
+    elif args.oracle == 'gfp':
+        oracle = GFPOracle()
     else:
-        # For Syn-3bfo we sample from the dataset
+        raise ValueError(f"Unknown oracle: {args.oracle}")
+
+    # Get initial sequences
+    if hasattr(oracle, 'get_initial_population'):
         initial_sequences = oracle.get_initial_population(args.initial_size)
-        
+    else:
+        # Fallback for ML oracles without a dataset to sample from
+        if args.oracle == 'aav':
+            wt_sequence = "DEEEIRTTNPVATEQYGSVSTNLQRGNR"
+        elif args.oracle == 'gfp':
+            wt_sequence = "SKGEELFTGVVPILVELDGDVNGHKFSVSGEGEGDATYGKLTLKFICTTGKLPVPWPTLVTTLSYGVQCFSRYPDHMKQHDFFKSAMPEGYVQERTIFFKDDGNYKTRAEVKFEGDTLVNRIELKGIDFKEDGNILGHKLEYNYNSHNVYIMADKQKNGIKVNFKIRHNIEDGSVQLADHYQQNTPIGDGPVLLPDNHYLSTQSALSKDPNEKRDHMVLLEFVTAAGITHGMDELYK"
+        else:
+            raise ValueError(f"Cannot generate initial population for oracle '{args.oracle}'")
+        initial_sequences = [wt_sequence] * args.initial_size
+
     print(f"Starting with {len(initial_sequences)} initial sequences")
 
     # Create optimizer

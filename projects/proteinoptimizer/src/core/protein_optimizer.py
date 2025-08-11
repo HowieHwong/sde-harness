@@ -21,7 +21,7 @@ class ProteinOptimizer:
 
     def __init__(
         self,
-        oracle,
+        oracle: ProteinOracle,
         population_size: int = 100,
         offspring_size: int = 200,
         mutation_rate: float = 0.01,
@@ -153,19 +153,16 @@ class ProteinOptimizer:
         for _ in range(self.offspring_size // 2):
             # Select parents
             parents_idx = np.random.choice(len(self.population), size=2, p=probs, replace=True)
-            parent1, parent2 = self.population[parents_idx[0]], self.population[parents_idx[1]]
-            # Crossover
-            child1, child2 = self._crossover(parent1, parent2)
-            # Mutation
-            child1 = self._llm_mutate(child1) if self.use_llm_mutations else self._random_mutate(child1)
-            child2 = self._llm_mutate(child2) if self.use_llm_mutations else self._random_mutate(child2)
+            parent_a, parent_b = self.population[parents_idx[0]], self.population[parents_idx[1]]
+            # Crossover and mutation
+            child, _ = self._crossover(parent_a, parent_b)
+            child = self._llm_mutate(child) if self.use_llm_mutations else self._random_mutate(child)
             # Evaluate and store
-            for child in [child1, child2]:
-                if child not in self.all_results:
-                    score = self.oracle.evaluate_protein(child)
-                    offspring.append(child)
-                    offspring_scores.append(score)
-                    self.all_results[child] = score
+            if child not in self.all_results:
+                score = self.oracle.evaluate_protein(child)
+                offspring.append(child)
+                offspring_scores.append(score)
+                self.all_results[child] = score
 
         # Combine and select best individuals for next generation
         all_sequences = self.population + offspring
@@ -215,7 +212,7 @@ class ProteinOptimizer:
             score_b = self.scores[idx_b]
         else:
             parent_a = parent_b = seq
-            score_a = score_b = self.oracle.evaluate_molecule(seq)
+            score_a = score_b = self.oracle.evaluate_protein(seq)
 
         pop_mean = statistics.mean(self.scores) if self.scores else 0.0
         pop_std = statistics.stdev(self.scores) if len(self.scores) > 1 else 0.0
