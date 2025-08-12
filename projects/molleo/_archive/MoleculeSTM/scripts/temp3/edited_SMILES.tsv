@@ -1,0 +1,10 @@
+This molecule is insoluble in water.	O=C(NC[C@H]1CCCO1)c1ccccc1N1CCCC1=O	O=C(NC[C@H]1CCCO1)c1ccccc1N1CCCC1=O	O=C(NC[C@H]1CCCO1)c1ccccc1N1CCCCC1=O	10.0
+This molecule is insoluble in water.	O=C(NC[C@H]1CCCO1)c1ccccc1N1CCCC1=O	O=C(NC[C@H]1CCCO1)c1ccccc1N1CCCC1=O	O=C(NC[C@H]1CCCO1)c1ccccc1N1CCCCC1=O	1.0
+This molecule is insoluble in water.	O=C(NC[C@H]1CCCO1)c1ccccc1N1CCCC1=O	O=C(NC[C@H]1CCCO1)c1ccccc1N1CCCC1=O	O=C(NC[C@H]1CCCO1)c1ccccc1N1CCCN(c2ccccc2N2CCCC2=O)C1=O	0.1
+This molecule is insoluble in water.	O=C(NC[C@H]1CCCO1)c1ccccc1N1CCCC1=O	O=C(NC[C@H]1CCCO1)c1ccccc1N1CCCC1=O	c1cccc(N2C(=O)CCC2)c(C(=O)N)c1N2CCCC2=O	0.01
+This molecule is insoluble in water.	O=C(NC[C@H]1CCCO1)c1ccccc1N1CCCC1=O	O=C(NC[C@H]1CCCO1)c1ccccc1N1CCCC1=O	c1cccc(N2C(=O)CCC2)c(C(=O)N)c1N2CCCC2=O	0.001
+This molecule is insoluble in water.	Cn1ccc(C(=O)Nc2sc3c(c2C#N)CCC3)cc1=O	Cn1ccc(C(=O)Nc2sc3c(c2C#N)CCC3)cc1=O	Cn1ccc(C(=O)Nc2sc3c(c2C#N)CCC3)cc1=O	10.0
+This molecule is insoluble in water.	Cn1ccc(C(=O)Nc2sc3c(c2C#N)CCC3)cc1=O	Cn1ccc(C(=O)Nc2sc3c(c2C#N)CCC3)cc1=O	Cn1ccc(C(=O)Nc2nc3c(s2)CCC3)cc1=O	1.0
+This molecule is insoluble in water.	Cn1ccc(C(=O)Nc2sc3c(c2C#N)CCC3)cc1=O	Cn1ccc(C(=O)Nc2sc3c(c2C#N)CCC3)cc1=O	c1c(C(Nc2nc3c(s2)CCC3)=O)ccn(C)c1=O)c1ccn(C)c(=O)c1	0.1
+This molecule is insoluble in water.	Cn1ccc(C(=O)Nc2sc3c(c2C#N)CCC3)cc1=O	Cn1ccc(C(=O)Nc2sc3c(c2C#N)CCC3)cc1=O	c1c(=O)n(C)ccc(C(=O)Nc2nc3c(c(C#N)cccc3Cl)cc2)c1Cl	0.01
+This molecule is insoluble in water.	Cn1ccc(C(=O)Nc2sc3c(c2C#N)CCC3)cc1=O	Cn1ccc(C(=O)Nc2sc3c(c2C#N)CCC3)cc1=O	c1c(=O)n(C)ccc(C(=O)Nc2nc3c(c4c(c4)c(Cl)ncc3)n2)ccn1C)n1CCCCCCCCCCCCCC1=C1=C1=C1C1C1C1=1=1=1C1C1C1C1C1C1C1C1C1C1C1C1=1c1C1C1C1C1C1C1C1C1C1C1C1CC1CCC1C1C1CCC1C1C1C1CCC1C1C1CCCC1C1CCC1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1CCCCCCCCCCCC(=C(=CCCCCCCC(=C(=C1C1C1C1C(=C(=C(=C(=C(=C(=C1c1(=C1c1c1C(=C(=C(=C(=C(=C(=C(=C(=C(=C(=C(=C(=C(=C(=C(=C(=C(=C(=C(=C(=C(=C(=C(=C(=C(=C(=C(=C(=C(=C(=C(=C(=C(=C(=C(=C(=C(=C(=C(=C(=C(=C(=C(=C(=C(=C(=C(=C(=C(=C(=C(=C(=C(=C(=C(=C(=C(c1c1c1c1c1c1c1c1c1c1c1c1c2C(c1c1c2c2c1c2C(c1c1c1c2C(=C(=C(=C(	0.001
