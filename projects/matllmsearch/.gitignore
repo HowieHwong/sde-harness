@@ -1,0 +1,32 @@
+# Credentials and sensitive files
+config/credentials.yaml
+*.env
+
+# Data files (large, should be downloaded separately)
+data/
+*.pkl
+*.pkl.gz
+*.csv
+
+# Logs and results
+logs/
+results/
+*.log
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
