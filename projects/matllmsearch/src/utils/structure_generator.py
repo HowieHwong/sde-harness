@@ -3,13 +3,25 @@
 import json
 import re
 import numpy as np
+import time
+import threading
 from typing import List, Dict, Any, Optional
 from pathlib import Path
+
+# Initialize Weave for tracing
+try:
+    import weave
+    weave.init("matllmsearch-generation")
+except ImportError:
+    pass
+except Exception as e:
+    pass
 
 from pymatgen.core.structure import Structure
 from pymatgen.core.lattice import Lattice
 
-from .llm_manager import LLMManager
+from sde_harness.core.generation import Generation
+from sde_harness.core.prompt import Prompt
 from .config import PROMPT_PATTERN_CSG, PROMPT_PATTERN_CSG_ZEROSHOT, PROMPT_PATTERN_CSP
 
 
@@ -17,7 +29,6 @@ class StructureGenerator:
     """Structure generator that integrates with SDE-harness Generation framework"""
     
     def __init__(self, model: str, temperature: float = 1.0, max_tokens: int = 4000,
-                 tensor_parallel_size: int = 4, gpu_memory_utilization: float = 0.84,
                  fmt: str = "poscar", task: str = "csg", args: Any = None):
         
         self.model = model
@@ -27,43 +38,77 @@ class StructureGenerator:
         self.task = task
         self.args = args
         
-        # Initialize LLM manager
-        self.llm_manager = LLMManager(
-            base_model=model,
-            tensor_parallel_size=tensor_parallel_size,
-            gpu_memory_utilization=gpu_memory_utilization,
-            temperature=temperature,
-            max_tokens=max_tokens
+        # Initialize SDE-Harness Generation (uses main config directory)
+        self.generator = Generation(
+            models_file="../../config/models.yaml",
+            credentials_file="../../config/credentials.yaml", 
+            model_name=model
+        )
+
+        # Store generation parameters
+        self.gen_args = {
+            "temperature": temperature,
+            "max_new_tokens": max_tokens,
+            "truncation": True
+        }
+        
+        # Initialize SDE-Harness Prompt templates
+        self._init_prompt_templates()
+    
+    def _init_prompt_templates(self) -> None:
+        """Initialize SDE-Harness Prompt templates with custom MatLLMSearch templates"""
+        
+        # CSG Zero-shot template
+        self.csg_zeroshot_prompt = Prompt(
+            custom_template=PROMPT_PATTERN_CSG_ZEROSHOT,
+            default_vars={
+                "fmt": self.fmt,
+                "random_seed": getattr(self.args, 'seed', 42)
+            }
         )
         
-        # Select prompt pattern
-        self.prompt_pattern = self._get_prompt_pattern()
-    
-    def _get_prompt_pattern(self) -> str:
-        """Get appropriate prompt pattern based on task and model"""
-        if "csg" in self.task:
-            return PROMPT_PATTERN_CSG
-        elif self.task == "csp":
-            return PROMPT_PATTERN_CSP
-        else:
-            return PROMPT_PATTERN_CSG
+        # CSG template (with input structures)
+        self.csg_prompt = Prompt(
+            custom_template=PROMPT_PATTERN_CSG,
+            default_vars={
+                "fmt": self.fmt,
+                "rep_size": 5  # Will be updated per call
+            }
+        )
+        
+        # CSP template
+        self.csp_prompt = Prompt(
+            custom_template=PROMPT_PATTERN_CSP,
+            default_vars={
+                "fmt": self.fmt,
+                "compound": getattr(self.args, 'compound', 'Unknown'),
+                "rep_size": 5  # Will be updated per call
+            }
+        )
     
     def generate(self, parent_structures: List[Structure], num_offspring: int = 5) -> List[Structure]:
         """Generate new structures based on parent structures"""
         
         if not parent_structures or len(parent_structures) == 0:
-            # Zero-shot generation
-            instructions = [PROMPT_PATTERN_CSG_ZEROSHOT.format(
-                fmt=self.fmt,
-                random_seed=self.args.seed
-            )] * self.args.population_size
+            # Zero-shot generation using SDE-Harness Prompt
+            zeroshot_instruction = self.csg_zeroshot_prompt.build()
+            instructions = [zeroshot_instruction] * self.args.population_size
         else:
             # Prepare input structures for prompting
             input_groups = self._group_structures(parent_structures)
-            instructions = self._prepare_instructions(input_groups, num_offspring)
+            instructions = self._prepare_instructions_with_prompt(input_groups, num_offspring)
         
-        # Generate responses using LLM
-        responses = self.llm_manager.generate(instructions)
+        # Generate responses using SDE-Harness Generation
+        responses = []
+        for i, instruction in enumerate(instructions):
+            try:
+                result = self.generator.generate(prompt=instruction, **self.gen_args)
+                response_text = result.get("text", "") if isinstance(result, dict) else str(result)
+                responses.append(response_text)
+                
+            except Exception as e:
+                print(f"Generation error for instruction {i+1}: {e}")
+                responses.append("")
         
         # Parse structures from responses
         structures = self._parse_structures_from_responses(responses)
@@ -72,43 +117,47 @@ class StructureGenerator:
     
     def _group_structures(self, structures: List[Structure]) -> List[List[Structure]]:
         """Group structures for context-aware generation"""
-        context_size = getattr(self.args, 'context_size', 5)
+        parent_size = getattr(self.args, 'parent_size', 2)
         groups = []
         
-        for i in range(0, len(structures), context_size):
-            group = structures[i:i + context_size]
+        for i in range(0, len(structures), parent_size):
+            group = structures[i:i + parent_size]
             groups.append(group)
         
         return groups
     
-    def _prepare_instructions(self, input_groups: List[List[Structure]], num_offspring: int) -> List[str]:
-        """Prepare instructions for LLM generation"""
+    def _prepare_instructions_with_prompt(self, input_groups: List[List[Structure]], num_offspring: int) -> List[str]:
+        """Prepare instructions using SDE-Harness Prompt class"""
         instructions = []
         
         for group in input_groups:
             # Convert structures to JSON format
             input_json = self._structures_to_json(group)
             
-            # Format instruction
+            # Select appropriate prompt template and build instruction
             if self.task == "csg":
-                instruction = PROMPT_PATTERN_CSG.format(
+                # Update variables for this specific generation
+                self.csg_prompt.add_vars(
                     input=input_json,
-                    rep_size=num_offspring,
-                    fmt=self.fmt
+                    rep_size=num_offspring
                 )
+                instruction = self.csg_prompt.build()
+                
             elif self.task == "csp":
-                instruction = PROMPT_PATTERN_CSP.format(
+                # Update variables for this specific generation
+                self.csp_prompt.add_vars(
                     input=input_json,
-                    rep_size=num_offspring,
-                    fmt=self.fmt,
-                    compound=getattr(self.args, 'compound', 'Unknown')
+                    rep_size=num_offspring
                 )
+                instruction = self.csp_prompt.build()
+                
             else:
-                instruction = PROMPT_PATTERN_CSG.format(
+                # Default to CSG
+                self.csg_prompt.add_vars(
                     input=input_json,
-                    rep_size=num_offspring,
-                    fmt=self.fmt
+                    rep_size=num_offspring
                 )
+                instruction = self.csg_prompt.build()
             
             instructions.append(instruction)
         
@@ -139,7 +188,7 @@ class StructureGenerator:
         else:
             return str(structure.to(fmt=self.fmt))
     
-    def _to_poscar_string(self, structure: Structure, precision: int = 12) -> str:
+    def _to_poscar_string(self, structure: Structure, precision: int = 8) -> str:
         """Convert Structure to POSCAR format string"""
         species = []
         counts = []
@@ -188,26 +237,97 @@ class StructureGenerator:
         return structures
     
     def _parse_single_response(self, response: str) -> List[Structure]:
-        """Parse structures from a single response"""
+        """Parse structures from a single response - simple approach looking for format pattern"""
         structures = []
         
-        # Clean JSON response
-        cleaned_response = self._clean_json_response(response)
+        # Simple pattern: look for '"fmt": "content"' in the response (where fmt is poscar or cif)
+        import re
+        # Pattern handles various endings: closing quote, or end of string/object
+        pattern = rf'"{self.fmt}"\s*:\s*"([^"]*(?:\\.[^"]*)*?)(?:"|$|(?=\s*}}))' 
+        matches = re.finditer(pattern, response, re.IGNORECASE | re.DOTALL)
         
-        # Extract structure strings
-        structure_strings = self._extract_structure_strings(cleaned_response)
-        
-        # Parse each structure string
-        for struct_str in structure_strings:
+        for match in matches:
             try:
-                structure = Structure.from_str(struct_str, fmt=self.fmt)
+                # Extract and clean the structure content
+                structure_content = match.group(1)
+                
+                # Replace escaped newlines with actual newlines (handle both \\n and \n)
+                structure_content = structure_content.replace('\\\\n', '\n')  # Double backslash first
+                structure_content = structure_content.replace('\\n', '\n')    # Then single backslash
+                
+                # Remove any extra escaping
+                structure_content = structure_content.replace('\\"', '"')
+                structure_content = structure_content.replace('\\\\', '\\')   # Fix remaining double backslashes
+                
+                # Fix POSCAR if needed - reconstruct atom counts from actual coordinates
+                if self.fmt.lower() == 'poscar':
+                    structure_content = self._fix_poscar_counts(structure_content)
+                
+                # Try to parse as Structure
+                structure = Structure.from_str(structure_content, fmt=self.fmt)
                 if self._validate_structure(structure):
                     structures.append(structure)
+                    
             except Exception as e:
-                print(f"Error parsing structure: {e}")
                 continue
         
         return structures
+    
+    def _fix_poscar_counts(self, poscar_content: str) -> str:
+        """Fix POSCAR by reconstructing atom counts from actual coordinate lines"""
+        lines = poscar_content.strip().split('\n')
+        
+        if len(lines) < 8:  # Minimum lines needed for valid POSCAR
+            return poscar_content
+            
+        try:
+            # Find coordinate section (after "direct" or "cartesian")
+            coord_start_idx = -1
+            for i, line in enumerate(lines):
+                if line.strip().lower() in ['direct', 'cartesian']:
+                    coord_start_idx = i + 1
+                    break
+            
+            if coord_start_idx == -1:
+                return poscar_content
+            
+            # Count actual atoms by element from coordinate lines
+            element_counts = {}
+            for i in range(coord_start_idx, len(lines)):
+                line = lines[i].strip()
+                if not line:
+                    continue
+                    
+                parts = line.split()
+                if len(parts) >= 4:  # x y z element
+                    element = parts[3]
+                    element_counts[element] = element_counts.get(element, 0) + 1
+            
+            if not element_counts:
+                return poscar_content
+            
+            # Reconstruct POSCAR with correct counts
+            # Update formula line (line 0)
+            formula = ""
+            for element, count in element_counts.items():
+                formula += f"{element}{count} "
+            lines[0] = formula.strip()
+            
+            # Update element symbols line (usually line 5)
+            elements = list(element_counts.keys())
+            if len(lines) > 5:
+                lines[5] = " ".join(elements)
+            
+            # Update count line (usually line 6)  
+            counts = [str(element_counts[el]) for el in elements]
+            if len(lines) > 6:
+                lines[6] = " ".join(counts)
+            
+            return '\n'.join(lines)
+            
+        except Exception:
+            # If reconstruction fails, return original
+            return poscar_content
     
     def _clean_json_response(self, response: str) -> str:
         """Clean JSON response from LLM"""

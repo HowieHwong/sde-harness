@@ -1,4 +1,4 @@
-"""Simplified stability calculator for SDE-harness integration"""
+"""Stability calculator for SDE-harness integration"""
 
 import numpy as np
 import torch
@@ -7,7 +7,11 @@ from dataclasses import dataclass
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 
 from pymatgen.core.structure import Structure
+from pymatgen.io.ase import AseAtomsAdaptor
+from chgnet.graph import CrystalGraphConverter
 from chgnet.model import CHGNet, StructOptimizer
+from chgnet.model.dynamics import EquationOfState
+from .e_hull_calculator import EHullCalculator
 
 
 @dataclass
@@ -23,15 +27,27 @@ class StabilityResult:
 
 
 class StabilityCalculator:
-    """Simplified stability calculator using CHGNet"""
+    """Stability calculator using CHGNet and EHullCalculator"""
     
     def __init__(self, mlip: str = "chgnet", ppd_path: str = "", device: str = "cuda"):
+        if device is None:
+            self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+        else:
+            self.device = device
         self.mlip = mlip
-        self.device = torch.device(device if torch.cuda.is_available() else 'cpu')
+        self.ppd_path = ppd_path  # Store for multi-GPU workers
+        self.e_hull = EHullCalculator(ppd_path)
+        self.adaptor = AseAtomsAdaptor()
+        self.num_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 1
         
-        # Initialize CHGNet
+        # Initialize models exactly as in original
         self.chgnet = CHGNet.load().to(self.device)
-        self.relaxer = StructOptimizer(model=self.chgnet, use_device=device)
+        converter = CrystalGraphConverter(
+            atom_graph_cutoff=6, bond_graph_cutoff=3, algorithm="fast", on_isolated_atoms="warn"
+        )
+        self.chgnet.graph_converter = converter
+        self.relaxer = StructOptimizer(model=self.chgnet, use_device='cuda:0')
+        self.EquationOfState = EquationOfState
         
         print(f"Initialized stability calculator with {mlip} on {self.device}")
     
@@ -58,17 +74,28 @@ class StabilityCalculator:
             relaxation_result = self._safe_timeout_wrapper(
                 self._relax_structure, 120, structure
             )
-            
             if not relaxation_result:
                 return None
             
             initial_energy = relaxation_result['initial_energy'] / structure.num_sites
-            final_energy = relaxation_result['final_energy'] / structure.num_sites
+            final_total_energy = float(relaxation_result['final_energy'])
+            final_energy = final_total_energy / structure.num_sites
             final_structure = relaxation_result['final_structure']
             delta_e = final_energy - initial_energy
             
-            # Calculate e_hull_distance (simplified - just return a reasonable value)
-            e_hull_distance = max(0.0, delta_e) if not wo_ehull else np.inf
+            # Calculate e_hull_distance using EHullCalculator
+            if not wo_ehull:
+                try:
+                    # Prepare data for EHullCalculator
+                    se_list = [{'structure': final_structure, 'energy': final_total_energy}]
+                    seh_list = self.e_hull.get_e_hull(se_list)
+                    e_hull_distance = seh_list[0]['e_hull']
+                    print(f"E-hull distance: {e_hull_distance}")
+                except Exception as ehull_error:
+                    print(f"E-hull calculation error: {ehull_error}")
+                    e_hull_distance = np.inf
+            else:
+                e_hull_distance = np.inf
             
             # Calculate bulk modulus (simplified - return a placeholder)
             bulk_modulus = 100.0 if not wo_bulk else -np.inf

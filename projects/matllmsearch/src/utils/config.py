@@ -32,6 +32,8 @@ Example for {fmt} format:
 
 Note: Try to generate diverse structures with different elements, lattice parameters, and atomic arrangements. Create a novel material structure using seed {random_seed}.
 
+IMPORTANT: Please output only the structure data in clean JSON format with no additional text, code blocks, or explanations.
+
 Output your hypotheses below:
 """
 
@@ -56,6 +58,8 @@ Your task:
 1. Generate {rep_size} new structure hypotheses
 2. Each structure should be stable and physically reasonable
 3. Format each structure exactly as shown in the input
+
+IMPORTANT: Please output only the structure data in clean JSON format with no additional text, code blocks, or explanations.
 
 Output your hypotheses below:
 """
@@ -134,6 +138,8 @@ Each proposed structure must be formatted in JSON with the following structure:
 }}
 
 Use proper JSON escaping for newlines (\\n) and other special characters.
+
+IMPORTANT: Please output only the structure data in clean JSON format with no additional text, code blocks, or explanations.
 
 Output your ground state polymorph prediction below:
 """

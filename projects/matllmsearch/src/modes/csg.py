@@ -29,8 +29,6 @@ class MatLLMSearchCSG:
             model=self.args.model,
             temperature=self.args.temperature,
             max_tokens=self.args.max_tokens,
-            tensor_parallel_size=self.args.tensor_parallel_size,
-            gpu_memory_utilization=self.args.gpu_memory_utilization,
             fmt=self.args.fmt,
             task="csg",
             args=self.args
@@ -47,9 +45,9 @@ class MatLLMSearchCSG:
         print(f"Starting Crystal Structure Generation with {self.args.model}")
         print(f"Population size: {self.args.population_size}, Max iterations: {self.args.max_iter}")
         
-        # Load seed structures
+        # Load seed structures from specified data path
         seed_structures = load_seed_structures(
-            pool_size=self.args.pool_size,
+            data_path=self.args.data_path,
             task="csg",
             random_seed=self.args.seed
         )
@@ -74,17 +72,17 @@ class MatLLMSearchCSG:
         output_path.mkdir(parents=True, exist_ok=True)
         
         # Initialize population
-        current_population = seed_structures[:self.args.population_size] if seed_structures else []
+        current_population = seed_structures[:self.args.population_size * self.args.parent_size] if seed_structures else []
         
         all_generations = []
         all_metrics = []
         
         for iteration in range(self.args.max_iter):
-            print(f"\n=== Iteration {iteration + 1}/{self.args.max_iter} ===")
+            print(f"=== Iteration {iteration + 1}/{self.args.max_iter} ===")
             
             # Generate offspring
             if current_population:
-                print(f"Generating {self.args.reproduction_size} offspring from {len(current_population)} parents")
+                print(f"Generating {self.args.population_size} * {self.args.reproduction_size} offspring from {len(current_population)} parents")
                 new_structures = self.structure_generator.generate(
                     current_population, 
                     num_offspring=self.args.reproduction_size

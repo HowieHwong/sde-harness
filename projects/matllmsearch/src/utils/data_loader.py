@@ -15,20 +15,20 @@ def validate_data_files() -> bool:
     return True
 
 
-def load_seed_structures(pool_size: int = -1, task: str = "csg", 
-                        random_seed: int = 42) -> List[Structure]:
+def load_seed_structures(data_path: str = "data/band_gap_processed_5000.csv", 
+                        task: str = "csg", random_seed: int = 42) -> List[Structure]:
     """Load seed structures for initialization"""
     
     try:
-        # Try to load from band gap dataset
-        data_path = Path("data/band_gap_processed.csv")
-        if data_path.exists():
-            print(f"Loading seed structures from: {data_path}")
-            return _load_from_bandgap_data(data_path, pool_size, task, random_seed)
+        # Try to load from specified data path
+        data_file = Path(data_path)
+        if data_file.exists():
+            print(f"Loading seed structures from: {data_file}")
+            return _load_from_bandgap_data(data_file, task, random_seed)
         
         # If no data files found, return empty list (will trigger zero-shot generation)
-        print("No seed structure files found, using zero-shot generation")
-        print("Expected location: data/band_gap_processed.csv")
+        print(f"No seed structure files found at: {data_path}")
+        print("Using zero-shot generation")
         return []
         
     except Exception as e:
@@ -36,7 +36,7 @@ def load_seed_structures(pool_size: int = -1, task: str = "csg",
         return []
 
 
-def _load_from_bandgap_data(data_path: Path, pool_size: int, task: str, 
+def _load_from_bandgap_data(data_path: Path, task: str, 
                            random_seed: int) -> List[Structure]:
     """Load structures from band gap processed data"""
     
@@ -55,14 +55,10 @@ def _load_from_bandgap_data(data_path: Path, pool_size: int, task: str,
     # Filter by composition length (3-6 elements for reasonable complexity)
     df = df[df['composition_len'].between(3, 6)]
     
-    # Shuffle
+    # Shuffle to get diverse samples
     df = df.sample(frac=1, random_state=random_seed)
     
-    # Apply pool size limit
-    if pool_size > 0:
-        df = df.head(pool_size)
-    
-    print(f"Loaded {len(df)} seed structures from band gap data")
+    print(f"Loaded {len(df)} seed structures from {data_path.name}")
     return df['structure'].tolist()
 
 

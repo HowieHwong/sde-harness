@@ -5,6 +5,7 @@ from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
 
 from pymatgen.core.structure import Structure
+from sde_harness.core.oracle import Oracle
 from ..utils.stability_calculator import StabilityCalculator, StabilityResult
 
 
@@ -23,11 +24,17 @@ class MaterialsEvaluation:
     valid: bool = False
 
 
-class MaterialsOracle:
-    """Oracle for evaluating crystal structures in materials discovery"""
+class MaterialsOracle(Oracle):
+    """Oracle for evaluating crystal structures in materials discovery
+    
+    Extends SDE-Harness Oracle with materials-specific evaluation metrics.
+    """
     
     def __init__(self, opt_goal: str = "e_hull_distance", mlip: str = "chgnet", 
                  ppd_path: str = "data/2023-02-07-ppd-mp.pkl.gz", device: str = "cuda"):
+        
+        # Initialize parent Oracle class
+        super().__init__()
         
         self.opt_goal = opt_goal
         self.mlip = mlip
@@ -38,6 +45,92 @@ class MaterialsOracle:
             ppd_path=ppd_path,
             device=device
         )
+        
+        # Register materials-specific metrics
+        self._register_materials_metrics()
+    
+    def _register_materials_metrics(self) -> None:
+        """Register materials-specific metrics with the Oracle base class"""
+        
+        # Register stability metric
+        def stability_metric(prediction: MaterialsEvaluation, reference: Any, **kwargs) -> float:
+            """Evaluate stability (E_hull distance) - lower is better"""
+            if not prediction.valid:
+                return float('inf')
+            return prediction.e_hull_distance
+        
+        # Register bulk modulus metric  
+        def bulk_modulus_metric(prediction: MaterialsEvaluation, reference: Any, **kwargs) -> float:
+            """Evaluate bulk modulus - higher is better, so return negative for minimization"""
+            if not prediction.valid:
+                return float('-inf')
+            return -prediction.bulk_modulus_relaxed
+        
+        # Register multi-objective metric
+        def multi_objective_metric(prediction: MaterialsEvaluation, reference: Any, **kwargs) -> float:
+            """Multi-objective score combining stability and bulk modulus"""
+            if not prediction.valid:
+                return float('inf')
+            return prediction.objective
+        
+        # Register validity metric
+        def validity_metric(prediction: MaterialsEvaluation, reference: Any, **kwargs) -> float:
+            """Structure validity (1.0 if valid, 0.0 if invalid)"""
+            return float(prediction.valid)
+        
+        # Register the metrics
+        self.register_metric("stability", stability_metric)
+        self.register_metric("bulk_modulus", bulk_modulus_metric) 
+        self.register_metric("multi_objective", multi_objective_metric)
+        self.register_metric("validity", validity_metric)
+        
+        # Register multi-round metrics for materials optimization
+        def materials_improvement_rate(history: Dict[str, List[Any]], reference: Any, 
+                                     current_iteration: int, **kwargs) -> float:
+            """Calculate improvement rate for materials metrics"""
+            target_metric = kwargs.get("target_metric", "stability")
+            if not history.get("scores") or len(history["scores"]) < 2:
+                return 0.0
+            
+            scores = []
+            for score_dict in history["scores"]:
+                if isinstance(score_dict, dict) and target_metric in score_dict:
+                    scores.append(score_dict[target_metric])
+            
+            if len(scores) < 2:
+                return 0.0
+            
+            # For stability, improvement means lower values
+            if target_metric == "stability":
+                return (scores[0] - scores[-1]) / len(scores)
+            else:
+                return (scores[-1] - scores[0]) / len(scores)
+        
+        def convergence_rate(history: Dict[str, List[Any]], reference: Any,
+                           current_iteration: int, **kwargs) -> float:
+            """Calculate convergence rate for materials optimization"""
+            if not history.get("scores") or len(history["scores"]) < 3:
+                return 0.0
+            
+            # Check convergence based on stability scores
+            recent_scores = []
+            for score_dict in history["scores"][-3:]:
+                if isinstance(score_dict, dict) and "stability" in score_dict:
+                    recent_scores.append(score_dict["stability"])
+            
+            if len(recent_scores) < 2:
+                return 0.0
+            
+            # Calculate variance of recent scores (lower variance = more converged)
+            mean_score = sum(recent_scores) / len(recent_scores)
+            variance = sum((score - mean_score) ** 2 for score in recent_scores) / len(recent_scores)
+            
+            # Return inverse of variance (higher = more converged)
+            return 1.0 / (1.0 + variance)
+        
+        # Register multi-round metrics
+        self.register_multi_round_metric("materials_improvement", materials_improvement_rate)
+        self.register_multi_round_metric("convergence_rate", convergence_rate)
     
     def evaluate(self, structures: List[Structure]) -> List[MaterialsEvaluation]:
         """Evaluate a list of structures"""
@@ -183,12 +276,17 @@ class MaterialsOracle:
             })
             
             if e_hull_distances:
-                stable_count = sum(1 for e in e_hull_distances if e <= 0.03)
+                stable_count_003 = sum(1 for e in e_hull_distances if e <= 0.03)
+                stable_count_01 = sum(1 for e in e_hull_distances if e <= 0.1)
                 metrics.update({
                     'min_e_hull_distance': min(e_hull_distances),
                     'avg_e_hull_distance': np.mean(e_hull_distances),
-                    'stable_structures': stable_count,
-                    'stability_rate': stable_count / len(e_hull_distances)
+                    'stable_structures_003': stable_count_003,
+                    'stable_structures_01': stable_count_01,
+                    'stability_rate_003': stable_count_003 / len(e_hull_distances),
+                    'stability_rate_01': stable_count_01 / len(e_hull_distances),
+                    'metastability_rate_003': stable_count_003 / len(valid_evals),
+                    'metastability_rate_01': stable_count_01 / len(valid_evals)
                 })
             
             if bulk_moduli:
@@ -198,3 +296,24 @@ class MaterialsOracle:
                 })
         
         return metrics
+    
+    # Override Oracle methods to integrate with SDE-Harness
+    def compute_structures(self, structures: List[Structure], reference: Any = None,
+                          metrics: Optional[List[str]] = None) -> Dict[str, List[float]]:
+        """Compute metrics for structures using SDE-Harness Oracle interface"""
+        
+        # Evaluate structures to get MaterialsEvaluation objects
+        evaluations = self.evaluate(structures)
+        
+        # Use specified metrics or default to all registered metrics
+        metrics_to_compute = metrics or self.list_single_round_metrics()
+        
+        # Compute metrics using parent Oracle class
+        results = {metric: [] for metric in metrics_to_compute}
+        
+        for evaluation in evaluations:
+            for metric in metrics_to_compute:
+                score = super().compute(evaluation, reference, [metric]).get(metric, float('inf'))
+                results[metric].append(score)
+        
+        return results

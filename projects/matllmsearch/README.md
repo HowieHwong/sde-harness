@@ -11,7 +11,7 @@ MatLLMSearch leverages large language models to generate novel crystal structure
 - **Crystal Structure Generation (CSG)**: Generate novel crystal structures using evolutionary algorithms guided by LLMs
 - **Crystal Structure Prediction (CSP)**: Predict ground state structures for target compounds  
 - **Multi-objective optimization**: Optimize for stability (E_hull distance) and mechanical properties (bulk modulus)
-- **Multiple LLM support**: Local models via vLLM, OpenAI GPT, and DeepSeek
+- **Multiple LLM support**: Local models, OpenAI GPT, and DeepSeek
 - **Structure validation**: Automated validation of generated structures
 - **Comprehensive analysis**: Built-in analysis tools for experimental results
 
@@ -29,24 +29,25 @@ cd projects/matllmsearch
 pip install -r requirements.txt
 ```
 
-3. Download required data files:
+3. Configure models and credentials in the main SDE-Harness config directory:
+
+4. Download required data files:
 ```bash
 # Create data directory
 mkdir -p data
 
 # Download seed structures (optional - enables few-shot generation)
-# Manual download from: https://drive.google.com/file/d/1DqE9wo6dqw3aSLEfBx-_QOdqmtqCqYQ5/view?usp=sharing
-# Save as: data/band_gap_processed.csv
+# You may download data/band_gap_processed.csv at https://drive.google.com/file/d/1DqE9wo6dqw3aSLEfBx-_QOdqmtqCqYQ5/view?usp=sharing
+# Or data/band_gap_processed_5000.csv at https://drive.google.com/file/d/14e5p3EoKzOHqw7hKy8oDsaGPK6gwhnLV/view?usp=sharing
 
 # Download phase diagram data (required for E_hull distance calculations)
 wget -O data/2023-02-07-ppd-mp.pkl.gz https://figshare.com/ndownloader/files/48241624
 ```
 
-4. (Optional) Set up API keys for external LLM providers:
-```bash
-export OPENAI_API_KEY="your_openai_key"
-export OPENROUTER_API_KEY="your_openrouter_key"
-```
+**Note**: 
+- All configuration is managed through the main SDE-Harness implementation
+- MatLLMSearch-specific models are configured in `config/models.yaml`
+- API keys are configured in `config/credentials.yaml` 
 
 ## Quick Start
 
@@ -54,23 +55,24 @@ export OPENROUTER_API_KEY="your_openrouter_key"
 Generate novel crystal structures using evolutionary optimization:
 
 ```bash
-python cli.py csg \\
-    --model meta-llama/Meta-Llama-3.1-70B-Instruct \\
-    --population-size 100 \\
-    --max-iter 10 \\
-    --opt-goal e_hull_distance \\
-    --save-label my_csg_experiment
+python cli.py csg \
+    --model meta-llama/Meta-Llama-3.1-70B-Instruct \
+    --population-size 100 \
+    --max-iter 10 \
+    --opt-goal e_hull_distance \
+    --data-path data/band_gap_processed_5000.csv \
+    --save-label csg_experiment
 ```
 
 ### Crystal Structure Prediction (CSP)
 Predict ground state structures for a target compound:
 
 ```bash
-python cli.py csp \\
-    --compound Ag6O2 \\
-    --model meta-llama/Meta-Llama-3.1-8B-Instruct \\
-    --population-size 50 \\
-    --max-iter 5 \\
+python cli.py csp \
+    --compound Ag6O2 \
+    --model meta-llama/Meta-Llama-3.1-70B-Instruct \
+    --population-size 10 \
+    --max-iter 5 \
     --save-label ag6o2_prediction
 ```
 
@@ -78,16 +80,19 @@ python cli.py csp \\
 Analyze experimental results:
 
 ```bash
-python cli.py analyze \\
-    --results-path logs/my_csg_experiment \\
+python cli.py analyze \
+    --results-path logs/my_csg_experiment \
     --experiment-name my_analysis
 ```
 
 ## Configuration Options
 
 ### Models
-- **Local models**: Any Hugging Face compatible model via vLLM
-- **OpenAI**: GPT-3.5, GPT-4 series
+MatLLMSearch now uses SDE-Harness unified model interface with support for:
+- **Local models**: Llama, Mistral, and other Hugging Face models
+- **OpenAI**: GPT-4o, GPT-4o-mini, GPT-3.5-turbo
+
+Model configuration is handled via the main SDE-Harness `config/models.yaml` and `config/credentials.yaml` files.
 
 ### Optimization Goals
 - `e_hull_distance`: Minimize energy above convex hull (stability)
@@ -100,20 +105,40 @@ python cli.py analyze \\
 
 ## Architecture
 
-MatLLMSearch is built on the SDE-Harness framework with the following components:
+MatLLMSearch is **fully integrated** with SDE-Harness core components:
 
-- **StructureGenerator**: LLM-based structure generation following SDE-Harness Generation interface
-- **MaterialsOracle**: Structure evaluation using DFT surrogates (CHGNet, ORB) following SDE-Harness Oracle interface  
-- **Workflow**: Evolutionary optimization workflow using SDE-Harness Workflow class
-- **ProjectBase**: Main project class inheriting from SDE-Harness ProjectBase
+### **Core Integration**
+- **`sde_harness.core.generation.Generation`**: Unified LLM interface replacing custom LLMManager
+  - Supports local models, OpenAI, Anthropic, DeepSeek
+  - Configuration-driven via `config/models.yaml` and `config/credentials.yaml`
+  - Built-in async support and resource management
+
+- **`sde_harness.core.oracle.Oracle`**: MaterialsOracle extends base Oracle class
+  - Custom materials metrics: `stability`, `bulk_modulus`, `validity`, `multi_objective` 
+  - Multi-round metrics: `materials_improvement`, `convergence_rate`
+  - Batch evaluation and trend analysis
+
+- **`sde_harness.core.prompt.Prompt`**: Dynamic prompting with custom templates
+  - Zero-shot generation prompts
+  - Few-shot generation with reference structures
+  - Crystal structure prediction prompts
+  - Variable substitution and template management
+
+### **Materials-Specific Components**
+- **StructureGenerator**: Uses Generation class for LLM-based structure creation
+- **MaterialsOracle**: Evaluates structures using CHGNet/ORB for stability and properties
+- **StabilityCalculator**: DFT surrogate models for energy and mechanical property prediction
 
 ## File Structure
 
 ```
 matllmsearch/
 ├── cli.py                          # Main command-line interface
+# Configuration files are in the main SDE-Harness config/ directory:
+# ../../config/models.yaml           # Model configurations (MatLLMSearch models included)
+# ../../config/credentials.yaml      # API credentials
 ├── data/                           # Data files directory
-│   ├── band_gap_processed.csv     # Seed structures (optional)
+│   ├── band_gap_processed_5000.csv     # Seed structures (optional)
 │   └── 2023-02-07-ppd-mp.pkl.gz   # Phase diagram data (required)
 ├── src/
 │   ├── modes/
@@ -121,8 +146,7 @@ matllmsearch/
 │   │   ├── csp.py                 # Crystal Structure Prediction mode  
 │   │   └── analyze.py             # Analysis mode
 │   ├── utils/
-│   │   ├── structure_generator.py  # LLM-based structure generator
-│   │   ├── llm_manager.py         # LLM interface management
+│   │   ├── structure_generator.py  # LLM-based structure generator (uses SDE-Harness Generation)
 │   │   ├── stability_calculator.py # Structure stability evaluation
 │   │   ├── data_loader.py         # Data loading utilities
 │   │   └── config.py              # Configuration and prompts

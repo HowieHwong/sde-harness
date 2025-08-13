@@ -7,6 +7,7 @@ Command Line Interface for materials discovery workflows.
 import argparse
 import sys
 import os
+from pathlib import Path
 from typing import Optional
 
 # Add project root to Python path
@@ -40,12 +41,11 @@ Example usage:
     common_args = argparse.ArgumentParser(add_help=False)
     common_args.add_argument("--log-dir", type=str, default="logs", help="Log directory (default: logs)")
     common_args.add_argument("--seed", type=int, default=42, help="Random seed (default: 42)")
+    common_args.add_argument("--data-path", type=str, default="data/band_gap_processed_5000.csv", help="Path to seed structures data file (default: data/band_gap_processed_5000.csv)")
     common_args.add_argument("--model", type=str, default="meta-llama/Meta-Llama-3.1-70B-Instruct",
                            help="LLM model to use")
     common_args.add_argument("--temperature", type=float, default=1.0, help="Temperature for LLM (default: 1.0)")
     common_args.add_argument("--max-tokens", type=int, default=4000, help="Max tokens for LLM (default: 4000)")
-    common_args.add_argument("--tensor-parallel-size", type=int, default=1, help="Tensor parallel size (default: 1)")
-    common_args.add_argument("--gpu-memory-utilization", type=float, default=0.85, help="GPU memory utilization (default: 0.85)")
 
     # Crystal Structure Generation (CSG) mode
     csg_parser = subparsers.add_parser(
@@ -57,13 +57,11 @@ Example usage:
                           help="Population size for genetic algorithm (default: 100)")
     csg_parser.add_argument("--reproduction-size", type=int, default=5,
                           help="Number of offspring per generation (default: 5)")
-    csg_parser.add_argument("--context-size", type=int, default=5,
-                          help="Context size for parent structures (default: 5)")
+    csg_parser.add_argument("--parent-size", type=int, default=2,
+                          help="Number of parent structures per group (default: 2)")
     csg_parser.add_argument("--max-iter", type=int, default=10,
                           help="Maximum iterations (default: 10)")
-    csg_parser.add_argument("--pool-size", type=int, default=-1,
-                          help="Reference pool size (-1 for all) (default: -1)")
-    csg_parser.add_argument("--opt-goal", choices=["e_hull_distance", "bulk_modulus_relaxed", "multi-obj"], 
+    csg_parser.add_argument("--opt-goal", choices=["e_hull_distance", "bulk_modulus_relaxed", "multi-obj"],
                           default="e_hull_distance", help="Optimization goal (default: e_hull_distance)")
     csg_parser.add_argument("--fmt", choices=["poscar", "cif"], default="poscar",
                           help="Structure format (default: poscar)")
@@ -85,8 +83,8 @@ Example usage:
                           help="Population size (default: 100)")
     csp_parser.add_argument("--reproduction-size", type=int, default=5,
                           help="Number of offspring per generation (default: 5)")
-    csp_parser.add_argument("--context-size", type=int, default=5,
-                          help="Context size for parent structures (default: 5)")
+    csp_parser.add_argument("--parent-size", type=int, default=2,
+                          help="Number of parent structures per group (default: 2)")
     csp_parser.add_argument("--max-iter", type=int, default=20,
                           help="Maximum iterations (default: 20)")
     csp_parser.add_argument("--fmt", choices=["poscar", "cif"], default="poscar",

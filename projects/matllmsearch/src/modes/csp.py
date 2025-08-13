@@ -30,8 +30,6 @@ class MatLLMSearchCSP:
             model=self.args.model,
             temperature=self.args.temperature,
             max_tokens=self.args.max_tokens,
-            tensor_parallel_size=self.args.tensor_parallel_size,
-            gpu_memory_utilization=self.args.gpu_memory_utilization,
             fmt=self.args.fmt,
             task="csp",
             args=self.args
@@ -168,7 +166,7 @@ class MatLLMSearchCSP:
         
         # Load all available seed structures
         all_seeds = load_seed_structures(
-            pool_size=-1,  # Load all available
+            data_path=self.args.data_path,  # Use specified data path
             task="csp",
             random_seed=self.args.seed
         )
