@@ -412,7 +412,7 @@ if __name__ == "__main__":
         
         # Test different models
         prompts = ["Hello world!"]
-        models = ["openai/gpt-4.1-nano-2025-04-14", "huggingface/Qwen/Qwen3-0.6B"]
+        models = ["openai/gpt-4o-2024-08-06","openai/gpt-4.1-nano-2025-04-14", "huggingface/Qwen/Qwen3-0.6B"]
         
         async def test_models():
             for model in models:
@@ -420,7 +420,7 @@ if __name__ == "__main__":
                     print(f"\nTesting {model}:")
                     results = await gen.generate_batch_async(prompts, model_name=model)
                     for i, res in enumerate(results):
-                        print(f"  Prompt {i}: {res['text'][:100]}...")
+                        print(f"  Prompt {i}: {res['text'][:5000]}...")
                 except Exception as e:
                     print(f"  Error with {model}: {e}")
                     raise e
