@@ -255,7 +255,14 @@ Follow the instructions below to propose a new protein:
         """
         if self.template != self.builtin_templates.get("few_shot"):
             raise ValueError("add_example only works with the 'few_shot' template")
-        examples = self.default_vars.get("examples", [])
+        examples = self.default_vars.get("examples", "")
+        if isinstance(examples, str):
+            # If examples is already a formatted string, convert it back to a list
+            # This can happen if add_example is called after build()
+            import re
+            pattern = r"Q: (.*?)\nA: (.*?)(?=\nQ: |\Z)"
+            matches = re.findall(pattern, examples, re.DOTALL)
+            examples = [{"prompt": q.strip(), "response": a.strip()} for q, a in matches]
         examples.append({"prompt": example_prompt, "response": example_response})
         # Format examples as a string
         formatted = "\n".join(
@@ -283,6 +290,8 @@ Follow the instructions below to propose a new protein:
             data = json.load(f)
         prompt = cls(custom_template=data['template'], default_vars=data['default_vars'])
         return prompt
+
+
 
 # Example usage
 if __name__ == "__main__":
