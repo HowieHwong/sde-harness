@@ -12,7 +12,6 @@ generation.py
 .venv
 
 llm-srbench/ 
-@llmsr/
-@projects/llmsr_old/
-@projects/llmsr/outputs/
+llm-sr/
+projects/llm_sr_old/
 

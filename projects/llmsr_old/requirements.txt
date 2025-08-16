@@ -1,7 +1,0 @@
-numpy>=1.21.0
-scipy>=1.7.0
-datasets>=2.0.0
-huggingface-hub>=0.16.0
-h5py>=3.7.0
-weave>=0.1.0
-
