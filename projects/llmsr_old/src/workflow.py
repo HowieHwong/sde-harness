@@ -38,7 +38,7 @@ class LLMSRWorkflowSync(Workflow):
             generator=generator,
             oracle=oracle,
             max_iterations=max_iterations,
-            enable_history_in_prompts=False,
+            enable_history_in_prompts=False, # We handle history manually in the prompt function
             enable_multi_round_metrics=True
         )
         

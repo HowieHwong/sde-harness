@@ -11,3 +11,8 @@ generation.py
 .vscode
 .venv
 
+./llmsr/
+./llm-srbench/ 
+./projects/llmsr_old/
+./projects/llmsr/outputs/
+

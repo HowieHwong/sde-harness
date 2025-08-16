@@ -55,9 +55,9 @@ class EquationPromptTemplates:
                     Returns:
                         A numpy array representing {var_descs[0]} as the result of applying the mathematical function to the inputs.
                     \"\"\"
-                    # TODO: Implement the mathematical relationship here
-                    # Example: {var_names[0]} = params[0] * {var_names[1]} + params[1]
-                    # Replace with your discovered equation
+                    # TODO: Implement the mathematical relationship here""" + \
+                    "# Example: {var_names[0]} = " + " + ".join([f"params[{i}] * {name}" for i, name in enumerate(var_names[1:])]) + f" + params[{len(var_names[1:])}]\n" + \
+                    """# Replace with your discovered equation
                     
                     return {var_names[0]}
                 ```

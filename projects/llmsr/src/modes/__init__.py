@@ -1,6 +1,7 @@
 """Mode implementations for LLMSR project."""
 
-from .prompt_templates import EquationPromptTemplates
+from .iter import LLMSRWorkflow
+from .evol import LLMSREvolutionaryWorkflow
 
-__all__ = ['EquationPromptTemplates']
+__all__ = ['LLMSRWorkflow', 'LLMSREvolutionaryWorkflow']
 

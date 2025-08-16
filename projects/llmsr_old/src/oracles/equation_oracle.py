@@ -93,6 +93,8 @@ class EquationOracle(Oracle):
                 if np.isnan(nmse) or np.isinf(nmse):
                     return float('inf')
                 
+                # breakpoint()
+                
                 return float(nmse)
                 
             except Exception as e:
@@ -166,6 +168,7 @@ class EquationOracle(Oracle):
             print(f"Error in MAE calculation: {e}")
             return float('inf')
     
+
     def _optimize_parameters(self, equation_func: callable, inputs: Any, outputs: np.ndarray) -> Optional[np.ndarray]:
         """
         Optimize parameters for the equation function.
@@ -201,7 +204,7 @@ class EquationOracle(Oracle):
             # inputs_list = [inputs[:, i] for i in range(inputs.shape[1])]
             # y_pred = equation_func(*inputs_list, initial_params)
             # loss_partial = lambda params: loss_function(params)
-            result = minimize(loss_function,initial_params,method=self.optimization_method,options={'maxiter': 1000})
+            result = minimize(loss_function,initial_params,method=self.optimization_method,options={'maxiter': 2000})
             if result.success and not np.isnan(result.fun) and not np.isinf(result.fun):
                 return result.x
             else:
@@ -210,6 +213,7 @@ class EquationOracle(Oracle):
         except Exception as e:
             print(f"Error in parameter optimization: {e}")
             return None
+    
     
     def _calculate_improvement_rate(self, history: Dict[str, List[Any]], reference: Any, current_iteration: int, **kwargs) -> float:
         """
