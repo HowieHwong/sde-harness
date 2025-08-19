@@ -5,8 +5,6 @@ ground_truth_fitness_values.csv
 credentials.yaml
 models.yaml
 
-generation.py 
-
 *.ipynb
 .vscode
 .venv
