@@ -319,6 +319,7 @@ class Workflow:
         generation_start_time = asyncio.get_event_loop().time()
         
         output = await self.generator.generate_async(built_prompt, **gen_args)
+
         
         generation_end_time = asyncio.get_event_loop().time()
         generation_duration = generation_end_time - generation_start_time
@@ -1011,6 +1012,7 @@ class Workflow:
         
         return current_metrics
 
+
 # Example usage
 if __name__ == "__main__":
     # Initialize weave for testing this module only
@@ -1040,7 +1042,7 @@ if __name__ == "__main__":
     workflow = Workflow(
         generator=gen,
         oracle=oracle,
-        max_iterations=5,
+        max_iterations=10,
         enable_history_in_prompts=True,
         enable_multi_round_metrics=True
     )
