@@ -303,8 +303,8 @@ def main():
         print("   - Providing additional molecular context")
     
     print("\n🔬 Key Features Demonstrated:")
-    print("   - Web scraping from NMRDB for NMR prediction")
-    print("   - LLM fallback when web scraping fails")
+    print("   - NMRShiftDB automation (CML) for NMR prediction")
+    print("   - Optional LLM fallback (disabled in engine by default)")
     print("   - Enhanced similarity calculation using both H-NMR and C-NMR")
     print("   - Configurable NMR tolerance and preferences")
     print("   - Comprehensive tracking of prediction methods used")

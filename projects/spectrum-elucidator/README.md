@@ -7,7 +7,7 @@ A comprehensive toolkit for iterative molecular structure elucidation from NMR s
 The Spectrum Elucidator Toolkit provides:
 
 - **Iterative Elucidation**: LLM generates molecular structures and refines them based on NMR similarity feedback
-- **Advanced NMR Prediction**: Web scraping from NMRDB + LLM fallback for accurate similarity calculation
+- **Advanced NMR Prediction**: NMRShiftDB automation (CML) for predictions; optional LLM fallback
 - **Enhanced Similarity Scoring**: Uses both H-NMR and C-NMR with configurable tolerance and preferences
 - **Comprehensive Visualization**: Tracks progression and generates detailed reports
 - **Batch Processing**: Handle multiple molecules efficiently
@@ -71,6 +71,13 @@ Optionally edit `config.json` (see `config_template.json`).
 python example_lightweight.py
 ```
 
+- From input NMR (custom target):
+```bash
+export OPENAI_API_KEY="your_api_key_here"
+python example_from_input_nmr.py
+```
+Edits inside the script let you paste your target H-NMR and/or 13C-NMR. The engine iterates 3–5 rounds, fetches/predicts NMR for each LLM-proposed SMILES using NMRShiftDB automation (CML), computes similarity, and refines.
+
 - Single/batch/enhanced:
 ```bash
 python example_single_elucidation.py
@@ -90,8 +97,8 @@ Order of operations when a new SMILES is generated:
 1. **Validate/normalize SMILES** (regex and optional RDKit).
 2. **Database lookup**: if the SMILES exists in `data/updated_table.csv`, use its stored `H_NMR` and/or `C_NMR`.
 3. **Prediction (optional)** if not found in DB and enabled:
-   - Web (NMRDB) if `nmr_predictor.use_web_scraping=True`.
-   - LLM fallback if `nmr_predictor.use_llm_fallback=True`.
+   - NMRShiftDB automation (CML) via `src/similarity.py`.
+   - Optional LLM fallback if you enable it explicitly.
 4. **Similarity computation**:
    - 13C: `src/similarity.py` (tolerant peak matching + F1).
    - 1H: advanced parser/matcher in `data_utils.py` (shift, integration, multiplicity).
@@ -99,8 +106,8 @@ Order of operations when a new SMILES is generated:
 
 User controls:
 - `elucidation.use_nmr_predictor`: False = DB only; True = allow prediction.
-- `nmr_predictor.use_web_scraping`: True/False (try NMRDB).
-- `nmr_predictor.use_llm_fallback`: True/False (ask LLM if web fails).
+- `nmr_predictor`: Uses NMRShiftDB automation by default.
+- LLM fallback can be wired in if desired, but is disabled by default in the engine.
 - If you want to always prefer predicted NMR over DB, ask us to add `prefer_predicted_over_db` or `nmr_source_priority`.
 
 ## 🔁 Iterative Workflow (after SMILES is generated)
@@ -151,5 +158,5 @@ Runs available tests (parsing, advanced similarity, LLM interaction where possib
 - OpenAI API docs (`https://platform.openai.com/docs`)
 - SMILES (`https://en.wikipedia.org/wiki/Simplified_molecular-input_line-entry_system`)
 - NMR (`https://en.wikipedia.org/wiki/Nuclear_magnetic_resonance_spectroscopy`)
-- NMRDB (`https://www.nmrdb.org/`)
+- NMRShiftDB (`https://www.nmrshiftdb.org/`)
 - RDKit (`https://www.rdkit.org/docs/`)

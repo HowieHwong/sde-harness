@@ -1,5 +1,19 @@
 import re
+import xml.etree.ElementTree as ET
+from urllib.parse import quote
 from typing import List, Tuple, Dict, Optional
+
+# Optional RDKit for fingerprints
+try:
+    from rdkit import Chem  # type: ignore
+    from rdkit.Chem import AllChem  # type: ignore
+    from rdkit import DataStructs  # type: ignore
+    RDKIT_AVAILABLE = True
+except Exception:
+    Chem = None  # type: ignore
+    AllChem = None  # type: ignore
+    DataStructs = None  # type: ignore
+    RDKIT_AVAILABLE = False
 
 # Common solvent residual 13C peaks (approximate, ppm)
 COMMON_SOLVENTS = {
@@ -11,6 +25,144 @@ COMMON_SOLVENTS = {
     "THF-d8": [67.21, 25.31],
     "toluene-d8": [137.9, 128.9, 125.9, 20.4],
 }
+
+# ---- NMRShiftDB automation client (CML-based) ----
+
+def _fetch_cml_from_nmrshiftdb(smiles: str, nucleus: str = "13C", timeout: int = 30) -> str:
+    """
+    Call NMRShiftDB 'search or predict' automation endpoint, return CML (XML) text.
+    nucleus: "13C", "1H", or others ("15N","31P","19F","11B","29Si","17O",...)
+    """
+    primary = "https://www.nmrshiftdb.org/NmrshiftdbServlet/nmrshiftdbaction/searchorpredict"
+    fallback = "https://nmrshiftdb.nmr.uni-koeln.de/NmrshiftdbServlet/nmrshiftdbaction/searchorpredict"
+    path = f"/smiles/{quote(smiles)}/spectrumtype/{nucleus}"
+    try:
+        import requests  # optional dependency
+    except Exception:
+        return ""
+
+    # Try primary host with verified TLS
+    try:
+        r = requests.get(primary + path, timeout=timeout)
+        if r.ok and r.text.strip():
+            return r.text
+    except Exception:
+        pass
+
+    # Try fallback host; its TLS chain can be incomplete, allow verify=False
+    try:
+        try:
+            requests.packages.urllib3.disable_warnings()  # type: ignore
+        except Exception:
+            pass
+        r = requests.get(fallback + path, timeout=timeout, verify=False)
+        if r.ok and r.text.strip():
+            return r.text
+    except Exception:
+        pass
+
+    return ""
+
+def _text(el: Optional[ET.Element]) -> Optional[str]:
+    return None if el is None else (el.text or "").strip() or None
+
+def _float_safe(x: Optional[str]) -> Optional[float]:
+    try:
+        return float(x) if x is not None else None
+    except Exception:
+        return None
+
+def _find_first_text(node: ET.Element, candidates: List[str]) -> Optional[str]:
+    """Try multiple tag names under any namespace."""
+    for name in candidates:
+        el = node.find(f".//{{*}}{name}")
+        if el is not None and (el.text or "").strip():
+            return el.text.strip()
+    return None
+
+def parse_peaks_from_cml(cml_text: str) -> List[Dict]:
+    """
+    Return [{'ppm': float, 'intensity': Optional[float], 'mult': Optional[str], 'J': Optional[str], 'raw': dict}, ...]
+    Notes:
+      - For predicted spectra, multiplicity / J may be missing or reside in various vendor-specific tags.
+      - We attempt common fields: xValue / yValue, multiplicity, peakMultiplicity, comment, label, etc.
+    """
+    if not cml_text or not cml_text.strip():
+        return []
+    root = ET.fromstring(cml_text)
+    peaks: List[Dict] = []
+    for peak in root.findall(".//{*}peak"):
+        # First try child-text fields
+        ppm = _float_safe(_find_first_text(peak, ["xValue", "xvalue", "x", "xCoord"]))
+        intensity = _float_safe(_find_first_text(peak, ["yValue", "yvalue", "y", "yCoord", "peakHeight"]))
+        mult = _find_first_text(peak, [
+            "multiplicity", "peakMultiplicity", "mult", "pattern", "spinmult"
+        ])
+        J = _find_first_text(peak, [
+            "J", "jCoupling", "coupling", "JValue", "Jvalue"
+        ])
+        comment = _find_first_text(peak, ["comment", "label", "name"])
+        # If not found, fall back to attributes (NMRShiftDB often encodes peaks as attributes)
+        if ppm is None:
+            ppm = _float_safe(peak.attrib.get('xValue') or peak.attrib.get('xvalue') or peak.attrib.get('x') or peak.attrib.get('xCoord'))
+        if intensity is None:
+            intensity = _float_safe(peak.attrib.get('yValue') or peak.attrib.get('yvalue') or peak.attrib.get('y') or peak.attrib.get('yCoord') or peak.attrib.get('peakHeight'))
+        if not mult:
+            mult = peak.attrib.get('peakMultiplicity') or peak.attrib.get('multiplicity') or peak.attrib.get('mult') or None
+        if not J:
+            J = peak.attrib.get('J') or peak.attrib.get('jCoupling') or peak.attrib.get('coupling') or None
+        if not comment:
+            comment = peak.attrib.get('label') or peak.attrib.get('name') or None
+        if not mult and comment:
+            m = re.search(r"\b(s|d|t|q|quin|sext|sept|m|dd|dt|dq|td|tt|dq|ddd)\b", comment, re.I)
+            if m:
+                mult = m.group(1)
+            mJ = re.search(r"J\s*=\s*([\d\.]+)\s*Hz", comment, re.I)
+            if mJ and not J:
+                J = mJ.group(1)
+        peaks.append({
+            "ppm": ppm,
+            "intensity": intensity,
+            "mult": mult,
+            "J": J,
+            "raw": {**{child.tag.split('}')[-1]: (child.text or "").strip() for child in peak}, **{k: v for k, v in peak.attrib.items()}},
+        })
+    peaks = [p for p in peaks if p["ppm"] is not None]
+    return sorted(peaks, key=lambda d: d["ppm"], reverse=True)
+
+def get_nmr_peaks(smiles: str, nucleus: str = "13C") -> List[Dict]:
+    """
+    Input: SMILES; Output: list of peaks for the given nucleus.
+      Each peak: {'ppm': float, 'intensity': Optional[float], 'mult': Optional[str], 'J': Optional[str], 'raw': dict}
+    """
+    cml = _fetch_cml_from_nmrshiftdb(smiles, nucleus=nucleus)
+    return parse_peaks_from_cml(cml)
+
+def get_1H_13C_peaks(smiles: str) -> Dict[str, List[Dict]]:
+    """Convenience wrapper: return both 1H and 13C peak lists."""
+    return {
+        "1H": get_nmr_peaks(smiles, "1H"),
+        "13C": get_nmr_peaks(smiles, "13C"),
+    }
+
+# ---- Tanimoto similarity (fallback) ----
+
+def tanimoto_smiles(smi_a: str, smi_b: str, radius: int = 2, n_bits: int = 2048) -> Optional[float]:
+    """Compute Tanimoto similarity between two SMILES using Morgan fingerprints.
+    Returns None if RDKit is unavailable or parsing fails.
+    """
+    if not RDKIT_AVAILABLE:
+        return None
+    try:
+        ma = Chem.MolFromSmiles(smi_a)
+        mb = Chem.MolFromSmiles(smi_b)
+        if ma is None or mb is None:
+            return None
+        fa = AllChem.GetMorganFingerprintAsBitVect(ma, radius, nBits=n_bits)
+        fb = AllChem.GetMorganFingerprintAsBitVect(mb, radius, nBits=n_bits)
+        return float(DataStructs.TanimotoSimilarity(fa, fb))
+    except Exception:
+        return None
 
 def parse_c_nmr(s: str, keep_ranges_as_center: bool = True) -> List[float]:
     """
@@ -183,4 +335,6 @@ def __main__():
     )
     print(format_report(res))
 
-__main__()
+
+if __name__ == "__main__":
+    __main__()

@@ -1,485 +1,292 @@
 """
-NMR prediction module for the Spectrum Elucidator Toolkit.
+NMR prediction helpers for the Spectrum Elucidator Toolkit.
 
-This module provides functionality to predict NMR spectra for generated SMILES
-structures using web scraping from NMRDB and LLM fallback prediction.
+This module provides a lightweight, dependency-minimal API to fetch/predict
+NMR spectra for a SMILES using the NMRShiftDB automation (CML) endpoints
+exposed via utilities in `src/similarity.py`. It does not use Selenium/NMRDB
+web-scraping or an LLM fallback and is safe to import in restricted runtimes.
 """
 
-# Core dependencies
 import time
-import pandas as pd
-import openai
-from bs4 import BeautifulSoup
 import re
-import urllib.parse
 from typing import List, Tuple, Optional, Dict, Any
 import logging
-from .similarity import compare_c_nmr_strings, parse_c_nmr
+import pandas as pd
 
-# Optional dependencies - import with fallbacks
-try:
-    from selenium import webdriver
-    from selenium.webdriver.common.by import By
-    from selenium.webdriver.support.ui import WebDriverWait
-    from selenium.webdriver.support import expected_conditions as EC
-    from selenium.webdriver.chrome.options import Options
-    SELENIUM_AVAILABLE = True
-except ImportError:
-    SELENIUM_AVAILABLE = False
-    print("Warning: Selenium not available. Web scraping will be disabled.")
+from .similarity import (
+    compare_c_nmr_strings,
+    parse_c_nmr,
+    get_nmr_peaks,
+    parse_peaks_from_cml,
+    get_1H_13C_peaks,
+)
+from .data_utils import NMRProcessor
 
+# Optional RDKit for molecular formula (best-effort)
 try:
     from rdkit import Chem
     RDKIT_AVAILABLE = True
-except ImportError:
+except Exception:
+    Chem = None  # type: ignore
     RDKIT_AVAILABLE = False
-    print("Warning: RDKit not available. Molecular validation will be limited.")
-
-try:
-    import numpy as np
-    NUMPY_AVAILABLE = True
-except ImportError:
-    NUMPY_AVAILABLE = False
-    print("Warning: NumPy not available. Some calculations may be limited.")
-
-try:
-    import matplotlib.pyplot as plt
-    MATPLOTLIB_AVAILABLE = True
-except ImportError:
-    MATPLOTLIB_AVAILABLE = False
-    print("Warning: Matplotlib not available. Plotting will be disabled.")
-
-try:
-    from PIL import Image
-    PIL_AVAILABLE = True
-except ImportError:
-    PIL_AVAILABLE = False
-    print("Warning: PIL not available. Image processing will be disabled.")
-
-# Note: easyocr is intentionally excluded due to heavy PyTorch dependencies
-# We use BeautifulSoup text extraction instead, which is more reliable for HTML content
 
 
 class NMRPredictor:
-    """Predict NMR spectra for SMILES structures using web scraping and LLM fallback."""
-    
-    def __init__(self, 
-                 openai_api_key: Optional[str] = None,
-                 headless: bool = True,
-                 timeout: int = 10,
-                 use_web_scraping: bool = True):
-        """
-        Initialize the NMR predictor.
-        
-        Args:
-            openai_api_key: OpenAI API key for LLM fallback prediction
-            headless: Whether to run browser in headless mode
-            timeout: Timeout for web scraping operations
-            use_web_scraping: Whether to enable web scraping (requires Selenium)
-        """
+    """Predict NMR spectra for SMILES using NMRShiftDB automation endpoints."""
+
+    def __init__(
+        self,
+        openai_api_key: Optional[str] = None,
+        headless: bool = True,
+        timeout: int = 10,
+        use_web_scraping: bool = True,
+    ):
+        """Initialize the predictor (keeps legacy signature for compatibility)."""
         self.openai_api_key = openai_api_key
         self.headless = headless
         self.timeout = timeout
-        self.use_web_scraping = use_web_scraping and SELENIUM_AVAILABLE
+        # This flag is a no-op now; kept for compatibility with examples
+        self.use_web_scraping = True
         self.logger = logging.getLogger(__name__)
-        
-        if not SELENIUM_AVAILABLE and use_web_scraping:
-            self.logger.warning("Selenium not available. Web scraping disabled.")
-            self.use_web_scraping = False
-    
+
+    # Thin wrappers to reuse module-level utilities and avoid duplication
     def collect_nmr_records(self, text: str) -> List[str]:
-        """
-        Extract NMR records from text using regex pattern.
-        
-        Args:
-            text: Text containing NMR data
-            
-        Returns:
-            List of extracted NMR records
-        """
-        # Define regex pattern to capture NMR records
-        nmr_pattern = r'NMR:\s*(.*?)(?=\.\s| loading|\n|$)'
-        
-        # Use re.findall to extract all matches
-        nmr_records = re.findall(nmr_pattern, text, re.DOTALL)
-        
-        # Clean up records
-        nmr_records = [record.strip() for record in nmr_records]
-        
-        return nmr_records
-    
+        return collect_nmr_records(text)
+
     def get_molecular_formula(self, smiles: str) -> str:
+        return get_molecular_formula(smiles)
+
+    # High-level API used by the engine (returns C first for historical reasons)
+    def get_nmr_prediction(self, smiles: str, fallback_to_llm: bool = False) -> Tuple[List[Any], List[Any]]:
+        """Return (C_records, H_records) for the SMILES using NMRShiftDB automation.
+
+        Records are raw peak dicts from NMRShiftDB (each has at minimum 'ppm'),
+        suitable for downstream `format_nmr_for_comparison`.
         """
-        Get molecular formula from SMILES using RDKit.
-        
-        Args:
-            smiles: SMILES representation of the molecule
-            
-        Returns:
-            Molecular formula string
-        """
-        if not RDKIT_AVAILABLE:
-            return "RDKit not available"
-        
+        return self.get_nmr_from_web(smiles)
+
+    def get_nmr_from_web(self, smiles: str) -> Tuple[List[Any], List[Any]]:
+        """Return (C_records, H_records) for the SMILES via NMRShiftDB automation."""
         try:
-            molecule = Chem.MolFromSmiles(smiles)
-            if molecule is None:
-                return "Invalid SMILES string"
-            
-            molecular_formula = Chem.rdMolDescriptors.CalcMolFormula(molecule)
-            return molecular_formula
+            peaks = get_1H_13C_peaks(smiles)
         except Exception as e:
-            self.logger.error(f"Error calculating molecular formula: {e}")
-            return "Error"
-    
-    def capture_text_from_webpage(self, url: str) -> str:
+            self.logger.warning(f"NMRShiftDB fetch failed for {smiles}: {e}")
+            return [], []
+        c = peaks.get("13C", []) or []
+        h = peaks.get("1H", []) or []
+        return c, h
+
+    def format_nmr_for_comparison(self, records: List[Any], nucleus: str) -> str:
+        """Format peak records into a compact string for similarity functions.
+
+        Accepts:
+          - list of dicts with 'ppm' keys (from NMRShiftDB helpers)
+          - list of numbers/strings that can be parsed as floats
+          - already-formatted strings (returned unchanged)
+        Output: a simple string like "δ 170.2, 151.3, ..." suitable for parsing.
         """
-        Capture text from webpage using Selenium and BeautifulSoup.
-        
-        Args:
-            url: URL to scrape
-            
-        Returns:
-            Extracted text content
-        """
-        if not self.use_web_scraping:
-            self.logger.warning("Web scraping is disabled")
+        if not records:
             return ""
-        
-        options = Options()
-        if self.headless:
-            options.add_argument('--headless')
-        options.add_argument('--no-sandbox')
-        options.add_argument('--disable-dev-shm-usage')
-        
-        driver = None
+        if isinstance(records, str):
+            return records
+        # If it looks like a list of dicts (NMRShiftDB), extract ppm values
+        vals: List[float] = []
         try:
-            driver = webdriver.Chrome(options=options)
-            driver.set_page_load_timeout(self.timeout)
-            
-            # Navigate to URL
-            driver.get(url)
-            
-            # Wait for page to load
-            time.sleep(6)
-            
-            # Try to click "I agree" button if present
-            try:
-                agree_button = WebDriverWait(driver, 7).until(
-                    EC.element_to_be_clickable((By.XPATH, '//button[text()="I agree"]'))
-                )
-                agree_button.click()
-                time.sleep(2)
-            except Exception as e:
-                self.logger.debug(f"No agree button found: {e}")
-            
-            # Get page source
-            page_source = driver.page_source
-            
-            # Parse with BeautifulSoup
-            soup = BeautifulSoup(page_source, 'html.parser')
-            extracted_text = soup.get_text(separator=' ')
-            
-            return extracted_text
-            
-        except Exception as e:
-            self.logger.error(f"Error scraping webpage {url}: {e}")
-            return ""
-        finally:
-            if driver:
-                driver.quit()
-    
-    def get_nmr_from_web(self, smiles: str) -> Tuple[List[str], List[str]]:
-        """
-        Get NMR data from NMRDB website.
-        
-        Args:
-            smiles: SMILES representation of the molecule
-            
-        Returns:
-            Tuple of (C_NMR_records, H_NMR_records)
-        """
-        if not self.use_web_scraping:
-            self.logger.info("Web scraping disabled, returning empty results")
-            return [], []
-        
-        try:
-            # Encode SMILES for URL
-            encoded_smiles = urllib.parse.quote(smiles)
-            
-            # URLs for NMR prediction
-            url_h = f"https://www.nmrdb.org/service.php?name=nmr-1h-prediction&smiles={encoded_smiles}"
-            url_c = f"https://www.nmrdb.org/service.php?name=nmr-13c-prediction&smiles={encoded_smiles}"
-            
-            # Scrape H-NMR
-            h_nmr_text = self.capture_text_from_webpage(url_h)
-            h_nmr_records = self.collect_nmr_records(h_nmr_text)
-            
-            # Scrape C-NMR
-            c_nmr_text = self.capture_text_from_webpage(url_c)
-            c_nmr_records = self.collect_nmr_records(c_nmr_text)
-            
-            self.logger.info(f"Web scraping successful for {smiles}: H={len(h_nmr_records)}, C={len(c_nmr_records)}")
-            
-            return c_nmr_records, h_nmr_records
-            
-        except Exception as e:
-            self.logger.error(f"Error getting NMR from web for {smiles}: {e}")
-            return [], []
-    
-    def predict_nmr_with_llm(self, smiles: str, nmr_type: str = "both") -> Tuple[List[str], List[str]]:
-        """
-        Predict NMR using LLM when web scraping fails.
-        
-        Args:
-            smiles: SMILES representation of the molecule
-            nmr_type: Type of NMR to predict ("H", "C", or "both")
-            
-        Returns:
-            Tuple of (C_NMR_records, H_NMR_records)
-        """
-        if not self.openai_api_key:
-            self.logger.warning("No OpenAI API key provided for LLM prediction")
-            return [], []
-        
-        try:
-            client = openai.OpenAI(api_key=self.openai_api_key)
-            
-            # Create prompt for NMR prediction
-            prompt = f"""You are an expert chemist specializing in NMR spectroscopy. 
-Given the SMILES structure: {smiles}
-
-Please predict the {nmr_type} NMR spectrum. Consider:
-1. Chemical environment of each atom
-2. Typical chemical shift ranges
-3. Multiplicity patterns
-4. Integration values
-
-Provide your response in this exact format:
-H-NMR: [chemical_shift] ([integration], [multiplicity], J = [coupling] Hz), [more peaks...]
-C-NMR: [chemical_shift], [more peaks...]
-
-Example format:
-H-NMR: 0.87 (3H, t, J = 6.5 Hz), 1.30 (2H, m), 7.10-7.32 (5H, m)
-C-NMR: 14.0, 22.6, 32.8, 127.8, 128.4, 140.6
-
-Please provide the NMR prediction:"""
-
-            response = client.chat.completions.create(
-                model="gpt-4",
-                messages=[
-                    {"role": "system", "content": "You are an expert chemist specializing in NMR spectroscopy."},
-                    {"role": "user", "content": prompt}
-                ],
-                max_tokens=500,
-                temperature=0.3
-            )
-            
-            response_text = response.choices[0].message.content
-            
-            # Extract NMR records from response
-            h_nmr_records = self.collect_nmr_records(response_text)
-            c_nmr_records = self.collect_nmr_records(response_text)
-            
-            self.logger.info(f"LLM prediction successful for {smiles}: H={len(h_nmr_records)}, C={len(c_nmr_records)}")
-            
-            return c_nmr_records, h_nmr_records
-            
-        except Exception as e:
-            self.logger.error(f"Error predicting NMR with LLM for {smiles}: {e}")
-            return [], []
-    
-    def get_nmr_prediction(self, smiles: str, fallback_to_llm: bool = True) -> Tuple[List[str], List[str]]:
-        """
-        Get NMR prediction for a SMILES structure.
-        
-        Args:
-            smiles: SMILES representation of the molecule
-            fallback_to_llm: Whether to use LLM if web scraping fails
-            
-        Returns:
-            Tuple of (C_NMR_records, H_NMR_records)
-        """
-        # Validate SMILES
-        if not self._validate_smiles(smiles):
-            self.logger.warning(f"Invalid SMILES: {smiles}")
-            return [], []
-        
-        # Try web scraping first if enabled
-        c_nmr_records, h_nmr_records = [], []
-        if self.use_web_scraping:
-            c_nmr_records, h_nmr_records = self.get_nmr_from_web(smiles)
-        
-        # If web scraping failed and LLM fallback is enabled
-        if fallback_to_llm and (not c_nmr_records or not h_nmr_records):
-            self.logger.info(f"Web scraping failed for {smiles}, trying LLM prediction")
-            c_nmr_records, h_nmr_records = self.predict_nmr_with_llm(smiles)
-        
-        return c_nmr_records, h_nmr_records
-    
-    def _validate_smiles(self, smiles: str) -> bool:
-        """
-        Basic SMILES validation.
-        
-        Args:
-            smiles: SMILES string to validate
-            
-        Returns:
-            True if SMILES appears valid
-        """
-        if not smiles:
-            return False
-        
-        if not RDKIT_AVAILABLE:
-            # Basic validation without RDKit
-            return bool(re.match(r'^[A-Za-z0-9()\[\]=#@+-]+$', smiles))
-        
-        try:
-            molecule = Chem.MolFromSmiles(smiles)
-            return molecule is not None
-        except:
-            return False
-    
-    def format_nmr_for_comparison(self, nmr_records: List[str], nmr_type: str = "C") -> str:
-        """
-        Format NMR records for similarity comparison.
-        
-        Args:
-            nmr_records: List of NMR record strings
-            nmr_type: Type of NMR ("H" or "C")
-            
-        Returns:
-            Formatted NMR string for comparison
-        """
-        if not nmr_records:
-            return ""
-        
-        # Join records with proper formatting
-        if nmr_type == "C":
-            # For C-NMR, typically just chemical shifts
-            formatted = "δ " + ", ".join(nmr_records)
-        else:
-            # For H-NMR, keep full format
-            formatted = " ".join(nmr_records)
-        
-        return formatted
-    
-    def calculate_nmr_similarity(self, 
-                                target_nmr: str, 
-                                predicted_nmr: str, 
-                                nmr_type: str = "C",
-                                tolerance: float = 0.20) -> float:
-        """
-        Calculate similarity between target and predicted NMR spectra.
-        
-        Args:
-            target_nmr: Target NMR spectrum string
-            predicted_nmr: Predicted NMR spectrum string
-            nmr_type: Type of NMR ("H" or "C")
-            tolerance: Tolerance for peak matching in ppm
-            
-        Returns:
-            Similarity score between 0 and 1
-        """
-        if not target_nmr or not predicted_nmr:
-            return 0.0
-        
-        try:
-            if nmr_type == "C":
-                # Use the similarity.py comparison for C-NMR
-                result = compare_c_nmr_strings(
-                    target_nmr, 
-                    predicted_nmr, 
-                    tol_ppm=tolerance
-                )
-                
-                # Extract F1 score as similarity
-                similarity = result["metrics"]["f1"]
-                return similarity
+            if isinstance(records, list) and records and isinstance(records[0], dict):
+                vals = [float(p["ppm"]) for p in records if p.get("ppm") is not None]
             else:
-                # For H-NMR, use a simpler approach
-                # Parse peaks and calculate basic similarity
-                target_peaks = self._parse_h_nmr_peaks(target_nmr)
-                predicted_peaks = self._parse_h_nmr_peaks(predicted_nmr)
-                
-                if not target_peaks or not predicted_peaks:
-                    return 0.0
-                
-                # Calculate similarity based on peak matching
-                matched_peaks = 0
-                total_peaks = max(len(target_peaks), len(predicted_peaks))
-                
-                for target_peak in target_peaks:
-                    for predicted_peak in predicted_peaks:
-                        if abs(target_peak - predicted_peak) <= tolerance:
-                            matched_peaks += 1
-                            break
-                
-                return matched_peaks / total_peaks if total_peaks > 0 else 0.0
-                
-        except Exception as e:
-            self.logger.error(f"Error calculating NMR similarity: {e}")
-            return 0.0
-    
-    def _parse_h_nmr_peaks(self, nmr_string: str) -> List[float]:
+                # Parse numbers from mixed list
+                vals = [float(x) for x in records]
+        except Exception:
+            # Last resort: join as-is
+            return "δ " + ", ".join(str(x) for x in records)
+        if not vals:
+            return ""
+        vals = sorted(vals, reverse=(nucleus.upper() == "C"))
+        return "δ " + ", ".join(f"{v:.2f}" for v in vals)
+
+    def calculate_nmr_similarity(self, nmr1: str, nmr2: str, nucleus: str, tolerance: float = 0.20) -> float:
+        """Compute similarity between two formatted NMR strings.
+
+        - For 13C, use tolerant peak matching (F1) via `compare_c_nmr_strings`.
+        - For 1H, use the advanced parser in `NMRProcessor`.
         """
-        Parse H-NMR peaks to extract chemical shifts.
-        
-        Args:
-            nmr_string: H-NMR spectrum string
-            
-        Returns:
-            List of chemical shift values
-        """
+        nuc = nucleus.upper()
+        if nuc == "C":
+            try:
+                res = compare_c_nmr_strings(nmr1, nmr2, tol_ppm=tolerance, keep_ranges_as_center=True)
+                return float(res["metrics"]["f1"])  # type: ignore
+            except Exception:
+                return 0.0
+        # Default to 1H logic
         try:
-            # Use the parse_c_nmr function from similarity.py as reference
-            # but adapt for H-NMR patterns
-            peaks = parse_c_nmr(nmr_string, keep_ranges_as_center=True)
-            return peaks
+            return float(NMRProcessor.calculate_nmr_similarity_advanced(nmr1, nmr2, "H", tolerance))
+        except Exception:
+            return 0.0
+
+# --- Module-level convenience helpers matching requested API ---
+
+def collect_nmr_records(text: str) -> List[str]:
+    """Extract NMR records from plain text, matching 'NMR: ...' snippets.
+    Mirrors the regex used by NMRPredictor.collect_nmr_records.
+    """
+    nmr_pattern = r'NMR:\s*(.*?)(?=\.\s| loading|\n|$)'
+    recs = re.findall(nmr_pattern, text, re.DOTALL)
+    return [r.strip() for r in recs]
+
+def get_molecular_formula(smiles: str) -> str:
+    """Compute a molecular formula via RDKit if available."""
+    if not RDKIT_AVAILABLE:
+        return "RDKit not available"
+    try:
+        mol = Chem.MolFromSmiles(smiles)
+        if mol is None:
+            return "Invalid SMILES string"
+        from rdkit.Chem import rdMolDescriptors
+        return rdMolDescriptors.CalcMolFormula(mol)
+    except Exception:
+        return "Error"
+
+def get_NMR(smiles: str) -> Tuple[List[Any], List[Any]]:
+    """Return (C_records, H_records) using the NMRShiftDB path (compat)."""
+    predictor = NMRPredictor()
+    return predictor.get_nmr_from_web(smiles)
+
+# --- Lightweight NMRShiftDB-based fetchers (no Selenium) ---
+
+def get_c_nmr_sequence_from_smiles(
+    smiles: str,
+    *,
+    round_decimals: int = 1,
+    merge_tol: float = 0.05,
+) -> Optional[str]:
+    """
+    Fetch predicted 13C NMR for a SMILES using NMRShiftDB (CML service),
+    then format as: "NMR: 19.2 (2C, s), 21.0 (1C, s), ...".
+
+    - Groups peaks within ±merge_tol ppm (after rounding) as one entry with count nC.
+    - Uses 's' as multiplicity placeholder for 13C (broadband decoupled typical report).
+    Returns None if no peaks can be fetched.
+    """
+    # Try robust NMRShiftDB servlet first (works behind JS predictor),
+    # then fall back to the similarity.py helper.
+    peaks: List[Dict[str, Any]] = []
+    try:
+        import requests  # local import to keep module import light
+        from urllib.parse import quote
+        base = "https://nmrshiftdb.nmr.uni-koeln.de/NmrshiftdbServlet/nmrshiftdbaction/searchorpredict"
+        url = f"{base}/smiles/{quote(smiles)}/spectrumtype/13C"
+        # SSL chain on the host is sometimes incomplete; allow unverified for read-only fetch
+        try:
+            # Suppress noisy insecure request warnings for this specific call
+            requests.packages.urllib3.disable_warnings()  # type: ignore
+        except Exception:
+            pass
+        r = requests.get(url, timeout=30, verify=False)
+        if r.ok and r.text.strip():
+            peaks = parse_peaks_from_cml(r.text)
+    except Exception:
+        peaks = []
+    # Fallback to helper if needed
+    if not peaks:
+        try:
+            peaks = get_nmr_peaks(smiles, nucleus="13C")  # [{'ppm': float, ...}]
+        except Exception:
+            peaks = []
+
+    # If still empty, parse attribute-style CML peakList directly (xValue on <peak>)
+    if not peaks:
+        try:
+            import xml.etree.ElementTree as ET
+            from urllib.parse import quote
+            base = "https://nmrshiftdb.nmr.uni-koeln.de/NmrshiftdbServlet/nmrshiftdbaction/searchorpredict"
+            url = f"{base}/smiles/{quote(smiles)}/spectrumtype/13C"
+            import requests
+            r = requests.get(url, timeout=30, verify=False)
+            if r.ok and r.text:
+                root = ET.fromstring(r.text)
+                tmp: List[Dict[str, Any]] = []
+                for peak in root.findall('.//{*}peak'):
+                    x = peak.attrib.get('xValue') or peak.attrib.get('xvalue') or peak.attrib.get('x')
+                    mult = peak.attrib.get('peakMultiplicity') or peak.attrib.get('multiplicity') or peak.attrib.get('mult')
+                    arefs = (peak.attrib.get('atomRefs') or '').strip()
+                    count = len([t for t in arefs.split() if t]) if arefs else 1
+                    try:
+                        ppm = float(x) if x is not None else None
+                    except Exception:
+                        ppm = None
+                    if ppm is not None:
+                        tmp.append({'ppm': ppm, 'mult': mult, 'count': count})
+                # Expand by count so downstream grouping works uniformly
+                peaks = []
+                for p in tmp:
+                    for _ in range(max(1, int(p.get('count', 1)))):
+                        peaks.append({'ppm': p['ppm'], 'mult': p.get('mult')})
+        except Exception:
+            peaks = []
+    if not peaks:
+        return None
+
+    # Extract ppm values and sort ascending
+    vals = sorted([p["ppm"] for p in peaks if isinstance(p.get("ppm"), (int, float))])
+    if not vals:
+        return None
+
+    # Round to desired decimals, then cluster near-identical values
+    rounded = [round(v, round_decimals) for v in vals]
+    rounded.sort()
+
+    sequences: List[Tuple[float, int]] = []  # (ppm, count)
+    for v in rounded:
+        if not sequences:
+            sequences.append((v, 1))
+        else:
+            last_v, last_c = sequences[-1]
+            if abs(v - last_v) <= merge_tol:
+                sequences[-1] = (last_v, last_c + 1)
+            else:
+                sequences.append((v, 1))
+
+    # Format: NMR: 19.2 (2C, s), 21.0 (1C, s), ...
+    parts = [f"{ppm:.{round_decimals}f} ({count}C, s)" for ppm, count in sequences]
+    return "NMR: " + ", ".join(parts)
+
+def update_csv_with_nmr(
+    input_csv: str,
+    output_csv: str,
+    smiles_column: str = 'SMILES',
+    out_h_col: str = 'up_H_NMR',
+    out_c_col: str = 'up_C_NMR',
+    sleep_sec: float = 0.0,
+) -> None:
+    """Batch-fetch NMR records for each SMILES in a CSV and write to a new CSV.
+
+    Adds/overwrites columns out_h_col and out_c_col with lists/strings of NMR records.
+    """
+    df = pd.read_csv(input_csv)
+    predictor = NMRPredictor()
+
+    for idx, row in df.iterrows():
+        smiles = str(row.get(smiles_column, '')).strip()
+        if not smiles:
+            continue
+        try:
+            c_rec, h_rec = predictor.get_nmr_from_web(smiles)
+            # Store compact strings for readability
+            df.at[idx, out_h_col] = predictor.format_nmr_for_comparison(h_rec, "H")
+            df.at[idx, out_c_col] = predictor.format_nmr_for_comparison(c_rec, "C")
         except Exception as e:
-            self.logger.error(f"Error parsing H-NMR peaks: {e}")
-            return []
+            # keep row but leave fields empty/NaN
+            predictor.logger.warning(f"Failed NMR fetch for index {idx} SMILES {smiles}: {e}")
+        if sleep_sec:
+            time.sleep(sleep_sec)
+    df.to_csv(output_csv, index=False)
 
-
-def test_nmr_predictor():
-    """Test function for the NMR predictor."""
-    # Test SMILES
-    test_smiles = "CCCCC1=CC=CC=C1"  # Pentylbenzene
-    
-    # Initialize predictor (without API key for testing)
-    predictor = NMRPredictor(use_web_scraping=False)  # Disable web scraping for testing
-    
-    print(f"Testing NMR prediction for: {test_smiles}")
-    print(f"Molecular formula: {predictor.get_molecular_formula(test_smiles)}")
-    
-    # Test web scraping (disabled)
-    print("\nTesting web scraping...")
-    if predictor.use_web_scraping:
-        c_nmr, h_nmr = predictor.get_nmr_from_web(test_smiles)
-        print(f"C-NMR records: {c_nmr}")
-        print(f"H-NMR records: {h_nmr}")
-    else:
-        print("Web scraping disabled for testing")
-    
-    # Test formatting
-    test_c_nmr = ["170.2", "151.3", "128.1", "77.16", "55.4"]
-    test_h_nmr = ["0.87 (3H, t)", "1.30 (2H, m)", "7.10-7.32 (5H, m)"]
-    
-    formatted_c = predictor.format_nmr_for_comparison(test_c_nmr, "C")
-    formatted_h = predictor.format_nmr_for_comparison(test_h_nmr, "H")
-    
-    print(f"Formatted C-NMR: {formatted_c}")
-    print(f"Formatted H-NMR: {formatted_h}")
-    
-    # Test similarity calculation
-    target_c_nmr = "δ 170.2, 151.3, 128.1, 77.16, 55.4"
-    predicted_c_nmr = "δ 170.21, 151.1, 128.3, 77.0, 29.8"
-    
-    similarity = predictor.calculate_nmr_similarity(
-        target_c_nmr, predicted_c_nmr, "C", tolerance=0.20
-    )
-    print(f"C-NMR similarity: {similarity:.3f}")
-
-
-if __name__ == "__main__":
-    test_nmr_predictor()
+__all__ = [
+    "NMRPredictor",
+    "collect_nmr_records",
+    "get_molecular_formula",
+    "get_c_nmr_sequence_from_smiles",
+    "update_csv_with_nmr",
+    "get_NMR",
+]

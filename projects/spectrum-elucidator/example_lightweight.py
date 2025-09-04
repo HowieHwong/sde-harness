@@ -3,7 +3,7 @@
 Lightweight example script for molecular structure elucidation using the Spectrum Elucidator Toolkit.
 
 This script demonstrates basic functionality without requiring heavy dependencies like:
-- Selenium (for web scraping)
+- No Selenium required
 - RDKit (for molecular validation)
 - EasyOCR (for image processing)
 
@@ -260,7 +260,7 @@ def main():
     print("   - Comprehensive result tracking and visualization")
     
     print("\n💡 To enable advanced features, install optional dependencies:")
-    print("   - selenium: For web scraping from NMRDB")
+    print("   - NMRShiftDB automation used for NMR predictions")
     print("   - rdkit-pypi: For advanced molecular validation")
     print("   - Then run: python example_enhanced_elucidation.py")
 
