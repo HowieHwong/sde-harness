@@ -512,6 +512,6 @@ If you use SDE-Harness in your research or project, please cite it as follows:
   title        = {SDE-Harness: Scientific Discovery Evaluation Framework},
   author       = {SDE-Harness Team},
   year         = {2024},
-  howpublished = {\url{https://github.com/your-org/SDE-Harness}}
+  howpublished = {\url{https://github.com/HowieHwong/SDE-Harness}}
 }
 ```
