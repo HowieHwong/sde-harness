@@ -1,4 +1,4 @@
-models=("none") # "openai/gpt-5-mini")
+models=("none" "openai/gpt-4o")
 datasets=("syn-3bfo" "gb1" "trpb" "aav" "gfp")
 tasks=("multi" "single")
 
@@ -8,7 +8,7 @@ tasks=("multi" "single")
 for m in "${models[@]}"; do
   for d in "${datasets[@]}"; do
     for t in "${tasks[@]}"; do
-      echo "Running: python3 cli.py $t --oracle $d --generations 8 --population-size 32 --offspring-size 32 --model $m"
+      echo "Running: python3 cli.py $t --oracle $d --generations 8 --population-size 200 --offspring-size 100 --model $m"
       python3 cli.py "$t" --oracle "$d" --generations 8 --population-size 200 --offspring-size 100 --model "$m" & 
     done
   done
