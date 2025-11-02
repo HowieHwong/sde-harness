@@ -98,6 +98,12 @@ python src/analyze.py --glob "./results/*.json" --higher-is-better 1
 ```
 This will ouput a table contains result summary.
 
+## Results
+| Model    |   Top_1 |   Top_5 |   Top_10 |
+|:---------|--------:|--------:|---------:|
+| Baseline |  0.4927 |  0.4404 |   0.4133 |
+| GPT      |  0.5149 |  0.4692 |   0.4384 |
+
 ---
 ## Code overview
 ```
