@@ -97,12 +97,15 @@ def run_single_objective(args) -> Dict[str, Any]:
     # Save results
     if hasattr(args, 'output_dir') and args.output_dir:
         import json
+        if args.model:
+            model = args.model.split('/')[-1]
+        else:
+            model = 'baseline'
         output_file = os.path.join(
             args.output_dir, 
-            f"results_{args.oracle}_{args.seed}.json"
+            f"results_single_{args.oracle}_{args.seed}_{model}.json"
         )
         os.makedirs(args.output_dir, exist_ok=True)
-        
         with open(output_file, 'w') as f:
             json.dump(results, f, indent=2)
         print(f"\nResults saved to: {output_file}")

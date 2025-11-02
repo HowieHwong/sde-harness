@@ -44,9 +44,9 @@ class ParetoOptimizer(ProteinOptimizer):
         shifted = np.random.permutation(len(self.population))
         probs = np.full(len(self.population), 1 / len(self.population))
         offspring, offspring_scores = [], []
-        for _ in range(self.offspring_size // 2):
+        for _ in range(self.offspring_size):
             p1, p2 = np.random.choice(len(self.population), 2, replace=True, p=probs)
-            child1 = self._llm_mutate(seq=self.population[p1]) if self.use_llm_mutations else self._random_mutate(seq=self.population[p1])
+            child1 = self._llm_mutate(p1, p2) if self.use_llm_mutations else self._random_mutate(seq=self.population[p1])
             if child1 not in self.all_results:
                 sc = self._eval_sequence(seq=child1)
                 offspring.append(child1)
@@ -93,8 +93,9 @@ class ParetoOptimizer(ProteinOptimizer):
             "final_population": list(zip(self.population, self.scores)),
             "all_results": self.all_results,
         } 
-    def _llm_mutate(self, seq: str, k: int = 5) -> str:
+    def _llm_mutate(self, idx_a: int, idx_b: int, k: int = 5) -> str:
         """Use LLM to suggest a mutant; fall back to random if fails."""
+        seq = self.population[idx_a]
         if not self.use_llm_mutations:
             return self._random_mutate(seq)
 
@@ -106,7 +107,7 @@ class ParetoOptimizer(ProteinOptimizer):
         # Choose two random parents from population if available
         import random, statistics
         if len(self.population) >= 2:
-            idx_a, idx_b = random.sample(range(len(self.population)), 2)
+            # idx_a, idx_b = random.sample(range(len(self.population)), 2)
             parent_a = self.population[idx_a]
             parent_b = self.population[idx_b]
             score_a = self.scores[idx_a]
@@ -169,5 +170,5 @@ class ParetoOptimizer(ProteinOptimizer):
         # fallback
         # If all LLM attempts fail, use crossover + mutation
         parent_a, parent_b = prompt_obj.default_vars["protein_seq_1"], prompt_obj.default_vars["protein_seq_2"]
-        child = self._crossover(parent_a, parent_b)[0]
+        child = self._crossover(parent_a, parent_b)
         return self._random_mutate(child) 

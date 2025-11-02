@@ -49,7 +49,7 @@ The fitness score of Syn-3bfo is not bounded.
 
 ```bash
 # Optimize for AAV fitness using the ML model
-python cli.py single --oracle aav --generations 10 --population-size 50 --offspring-size 10 --model "openai/gpt-4o-2024-08-06"
+python cli.py single --oracle aav --generations 4 --population-size 32 --offspring-size 32
 ```
 
 ### 2. Multi-objective (weighted sum)
@@ -85,6 +85,18 @@ python cli.py workflow --generations 3 --model "openai/gpt-4o-2024-08-06" --orac
 
 Logs & artefacts can be inspected in the Weave UI under
 `proteinoptimizer_*` projects.
+
+### 5. Script
+```bash
+sh run_all.sh
+```
+This scripts will run all the model on all the datasets. Please edit as needed.
+
+### 6. Evaluation
+```bash
+python src/analyze.py --glob "./results/*.json" --higher-is-better 1 
+```
+This will ouput a table contains result summary.
 
 ---
 ## Code overview
@@ -127,10 +139,10 @@ and follows the MIT license of SDE-Harness.  See the root `LICENSE` file.
 If you find this work useful, please cite our paper:
 
 ```
-@article{wang2025large,
+@inproceedings{wang2025large,
   title={Large Language Model is Secretly a Protein Sequence Optimizer},
-  author={Wang, Yinkai and He, Jiaxing and Du, Yuanqi and Chen, Xiaohui and Li, Jianan Canal and Liu, Li-Ping and Xu, Xiaolin and Hassoun, Soha},
-  journal={arXiv preprint arXiv:2501.09274},
+  author={Wang, Yinkai and He, Jiaxing and Du, Yuanqi and Chen, Xiaohui and Li, Jianan Canal and Liu, Liping and Xu, Xiaolin and Hassoun, Soha},
+  booktitle={Learning Meaningful Representations of Life (LMRL) Workshop at ICLR 2025},
   year={2025}
 }
 
