@@ -86,6 +86,18 @@ python cli.py workflow --generations 3 --model "openai/gpt-4o-2024-08-06" --orac
 Logs & artefacts can be inspected in the Weave UI under
 `proteinoptimizer_*` projects.
 
+### 5. Script
+```bash
+sh run_all.sh
+```
+This scripts will run all the model on all the datasets. Please edit as needed.
+
+### 6. Evaluation
+```bash
+python src/analyze.py --glob "./results/*.json" --higher-is-better 1 
+```
+This will ouput a table contains result summary.
+
 ---
 ## Code overview
 ```
