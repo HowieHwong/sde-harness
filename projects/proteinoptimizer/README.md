@@ -127,12 +127,11 @@ and follows the MIT license of SDE-Harness.  See the root `LICENSE` file.
 If you find this work useful, please cite our paper:
 
 ```
-@article{wang2025large,
+@inproceedings{wang2025large,
   title={Large Language Model is Secretly a Protein Sequence Optimizer},
-  author={Wang, Yinkai and He, Jiaxing and Du, Yuanqi and Chen, Xiaohui and Li, Jianan Canal and Liu, Li-Ping and Xu, Xiaolin and Hassoun, Soha},
-  journal={arXiv preprint arXiv:2501.09274},
+  author={Wang, Yinkai and He, Jiaxing and Du, Yuanqi and Chen, Xiaohui and Li, Jianan Canal and Liu, Liping and Xu, Xiaolin and Hassoun, Soha},
+  booktitle={Learning Meaningful Representations of Life (LMRL) Workshop at ICLR 2025},
   year={2025}
 }
 
 ```
-python cli.py multi --oracle syn-3bfo  --generations 2 --population-size 32 --offspring-size 32   
