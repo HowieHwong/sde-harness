@@ -8,6 +8,10 @@ from .base import ProteinOracle
 from src.utils.predictors import BaseCNN
 from src.utils.tokenize import Encoder
 
+def min_max_normalize(minimum,maximum,score):
+    width = maximum-minimum
+    normalize_score = (score-minimum)/width
+    return normalize_score
 
 def get_model(predictor_dir, oracle_dir, use_oracle=True):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -45,15 +49,17 @@ class AAVOracle(ProteinOracle):
         # Get path relative to this file
         base_dir = os.path.dirname(os.path.abspath(__file__))
         oracle_dir = os.path.join(base_dir, "../utils/ckpt/AAV/mutations_0/percentile_0.0_1.0")
-        
+        gt = pd.read_csv(os.path.join(base_dir, "../../data/AAV/ground_truth.csv"))
+        self.score_max = gt['score'].max()
+        self.score_min = gt['score'].min()
         self.oracle = get_model(predictor_dir=None, oracle_dir=oracle_dir)
         self.tokenizer = Encoder()
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
+        self._potts_landscape = None
     def _evaluate_protein_impl(self, sequence: str) -> float:
         """Predict fitness using the loaded ML model."""
         tokenized = self.tokenizer.encode([sequence]).to(self.device)
-        return self.oracle(tokenized).item()
+        return min_max_normalize(self.score_min, self.score_max, self.oracle(tokenized).item())
 
 class GFPOracle(ProteinOracle):
     """ML-based oracle for GFP fitness prediction."""
@@ -64,12 +70,14 @@ class GFPOracle(ProteinOracle):
         base_dir = os.path.dirname(os.path.abspath(__file__))
         predictor_dir = os.path.join(base_dir, "../utils/ckpt/GFP/mutations_7/percentile_0.0_0.3/unsmoothed_smoothed/01_03_2025_23_56")
         oracle_dir = os.path.join(base_dir, "../utils/ckpt/GFP/mutations_0/percentile_0.0_1.0")
-
+        gt = pd.read_csv(os.path.join(base_dir, "../../data/GFP/ground_truth.csv"))
+        self.score_max = gt['score'].max()
+        self.score_min = gt['score'].min()
         self.oracle = get_model(predictor_dir=predictor_dir, oracle_dir=oracle_dir)
         self.tokenizer = Encoder()
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
+        self._potts_landscape = None
     def _evaluate_protein_impl(self, sequence: str) -> float:
         """Predict fitness using the loaded ML model."""
         tokenized = self.tokenizer.encode([sequence]).to(self.device)
-        return self.oracle(tokenized).item() 
+        return min_max_normalize(self.score_min, self.score_max, self.oracle(tokenized).item())

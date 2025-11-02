@@ -35,7 +35,7 @@ Example usage:
     common_args.add_argument(
         "--model",
         type=str,
-        default="openai/gpt-4o-2024-08-06",
+        default="openai/gpt-5-mini",
         help="Model name for LLM-guided mutations (e.g., openai/gpt-4o-2024-08-06, claude-3-opus-20240229). Use 'none' for random mutations only."
     )
     common_args.add_argument(
@@ -112,8 +112,8 @@ Example usage:
         choices=oracle_choices,
         help="Oracle to use for optimization.",
     )
-    multi_parser.add_argument("--fitness-weight", type=float, default=1.0, help="Weight for fitness/Potts energy (maximise)")
-    multi_parser.add_argument("--hamming-weight", type=float, default=-0.1, help="Weight for Hamming distance (minimise)")
+    multi_parser.add_argument("--fitness-weight", type=float, default=0.5, help="Weight for fitness/Potts energy (maximise)")
+    multi_parser.add_argument("--hamming-weight", type=float, default=-0.5, help="Weight for Hamming distance (minimise)")
 
     # Pareto mode
     pareto_parser = subparsers.add_parser(

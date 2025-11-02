@@ -24,7 +24,7 @@ class ProteinOptimizer:
         oracle: ProteinOracle,
         population_size: int = 100,
         offspring_size: int = 200,
-        mutation_rate: float = 0.01,
+        mutation_rate: float = 0.3,
         random_seed: Optional[int] = None,
         model_name: Optional[str] = None,
         use_llm_mutations: bool = False,
@@ -75,15 +75,17 @@ class ProteinOptimizer:
             starting_sequences: Initial population.
             num_generations: Number of generations to evolve.
         """
-        if not starting_sequences:
-            raise ValueError("`starting_sequences` must contain at least one sequence.")
+        # if starting_sequences != None:
+        #     raise ValueError("`starting_sequences` must contain at least one sequence.")
 
         # Ensure all sequences have the same length
         seq_len = len(starting_sequences[0])
         if any(len(s) != seq_len for s in starting_sequences):
             raise ValueError("All sequences must have the same length.")
-
+        if hasattr(self.oracle, 'get_initial_population'):
+            starting_sequences = self.oracle.get_initial_population(self.population_size)
         self._initialize_population(starting_sequences)
+        
 
         best_scores: List[float] = []
         best_sequences: List[str] = []
@@ -117,7 +119,6 @@ class ProteinOptimizer:
         self.population = []
         self.scores = []
         self.all_results = {}
-
         # Add starting sequences (deduplicated)
         for seq in starting_sequences:
             if seq not in self.all_results:
@@ -129,7 +130,7 @@ class ProteinOptimizer:
         # Fill the rest of the population with random mutations of starting sequences
         while len(self.population) < self.population_size:
             parent_seq = random.choice(self.population)
-            mutant = self._llm_mutate(parent_seq) if self.use_llm_mutations else self._random_mutate(parent_seq)
+            mutant = self._random_mutate(parent_seq)
             if mutant not in self.all_results:
                 score = self.oracle.evaluate_protein(mutant)
                 self.population.append(mutant)
@@ -149,14 +150,18 @@ class ProteinOptimizer:
 
         offspring: List[str] = []
         offspring_scores: List[float] = []
+        step = 0
 
-        for _ in range(self.offspring_size // 2):
+        while len(offspring) < self.offspring_size:
+            if step >= 2*self.offspring_size:
+                break
+            step += 1
             # Select parents
             parents_idx = np.random.choice(len(self.population), size=2, p=probs, replace=True)
-            parent_a, parent_b = self.population[parents_idx[0]], self.population[parents_idx[1]]
+            parent_a, parent_b = parents_idx[0], parents_idx[1]
             # Crossover and mutation
-            child, _ = self._crossover(parent_a, parent_b)
-            child = self._llm_mutate(child) if self.use_llm_mutations else self._random_mutate(child)
+            child = self._crossover(self.population[parent_a], self.population[parent_b])
+            child = self._llm_mutate(parent_a, parent_b) if self.use_llm_mutations else self._random_mutate(child)
             # Evaluate and store
             if child not in self.all_results:
                 score = self.oracle.evaluate_protein(child)
@@ -173,29 +178,41 @@ class ProteinOptimizer:
 
     # --------------- Evolutionary operators ---------------------------------
     def _crossover(self, seq1: str, seq2: str) -> tuple[str, str]:
-        """One-point crossover between two sequences."""
         if len(seq1) != len(seq2):
-            raise ValueError("Sequences must be the same length for crossover.")
-        if len(seq1) < 2:
-            return seq1, seq2  # Nothing to cross
+            raise ValueError("Sequences must be of the same length for crossover.")
+        
+        # Randomly choose a crossover point
         point = random.randint(1, len(seq1) - 1)
-        child1 = seq1[:point] + seq2[point:]
-        child2 = seq2[:point] + seq1[point:]
-        return child1, child2
+        
+        # Perform crossover
+        new_seq1 = seq1[:point] + seq2[point:]
+        # new_seq2 = seq2[:point] + seq1[point:]
+        # new_seq1 = seq1
+        # new_seq1 = seq1[:point] + seq2[point] + seq1[point+1:]
+        return new_seq1
 
-    def _random_mutate(self, seq: str) -> str:
+
+    def _random_mutate(self, sequence: str) -> str:
         """Random point mutations applied across the sequence length."""
-        seq_list = list(seq)
-        for i in range(len(seq_list)):
-            if random.random() < self.mutation_rate:
-                seq_list[i] = random.choice(AMINO_ACIDS)
-        return "".join(seq_list)
+        
+        valid_chars = 'ACDEFGHIKLMNPQRSTVWY'  
+        # print(mutation_rate)
+        if random.random() < self.mutation_rate:
+            return sequence
+        sequence_list = list(sequence)
+        char = random.choice(valid_chars)
+        index = random.choice(range(len(sequence_list)))
+        # for i in range(len(sequence_list)):
+        #     sequence_list[i] = random.choice(valid_chars)
+        sequence_list[index] = char
+        return ''.join(sequence_list)
 
     # ------------------------------------------------------------------
-    def _llm_mutate(self, seq: str, k: int = 5) -> str:
+    def _llm_mutate(self, idx_a: int , idx_b: int, k: int = 5) -> str:
         """Use LLM to suggest a mutant; fall back to random if fails."""
+        seq = self.population[idx_a]
         if not self.use_llm_mutations:
-            return self._random_mutate(seq)
+            return self._random_mutate(self.population[idx_a])
 
         prompt = (
             None  # will be built via Prompt below
@@ -205,7 +222,7 @@ class ProteinOptimizer:
         # Choose two random parents from population if available
         import random, statistics
         if len(self.population) >= 2:
-            idx_a, idx_b = random.sample(range(len(self.population)), 2)
+            # idx_a, idx_b = random.sample(range(len(self.population)), 2)
             parent_a = self.population[idx_a]
             parent_b = self.population[idx_b]
             score_a = self.scores[idx_a]
@@ -239,8 +256,8 @@ class ProteinOptimizer:
                 response = self.generator.generate(
                     prompt=prompt,
                     model_name=self.model_name,
-                    temperature=0.8,
-                    max_tokens=len(seq) + 50,  # More room for box etc.
+                    # temperature=0.8,
+                    # max_completion_tokens=len(seq) + 500,  # More room for box etc.
                 )
                 text = response["text"].strip()
 
@@ -262,6 +279,7 @@ class ProteinOptimizer:
                 if generated_sequence:
                     break
                 retry_count += 1
+                print(retry_count)
 
             if generated_sequence:
                 return generated_sequence
@@ -271,5 +289,5 @@ class ProteinOptimizer:
         # fallback
         # If all LLM attempts fail, use crossover + mutation
         parent_a, parent_b = prompt_obj.default_vars["protein_seq_1"], prompt_obj.default_vars["protein_seq_2"]
-        child = self._crossover(parent_a, parent_b)[0]
+        child = self._crossover(parent_a, parent_b)
         return self._random_mutate(child) 

@@ -49,7 +49,7 @@ The fitness score of Syn-3bfo is not bounded.
 
 ```bash
 # Optimize for AAV fitness using the ML model
-python cli.py single --oracle gfp --generations 10 --population-size 50 --offspring-size 10
+python cli.py single --oracle aav --generations 4 --population-size 32 --offspring-size 32
 ```
 
 ### 2. Multi-objective (weighted sum)
@@ -135,3 +135,4 @@ If you find this work useful, please cite our paper:
 }
 
 ```
+python cli.py multi --oracle syn-3bfo  --generations 2 --population-size 32 --offspring-size 32   
