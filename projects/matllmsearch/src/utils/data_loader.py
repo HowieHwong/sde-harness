@@ -62,8 +62,6 @@ def _load_from_bandgap_data(data_path: Path, task: str,
     return df['structure'].tolist()
 
 
-
-
 def matches_composition(comp1: Composition, comp2: Composition) -> bool:
     """Check if two compositions match exactly"""
     if set(comp1.elements) != set(comp2.elements):
@@ -85,3 +83,45 @@ def matches_unit_cell_pattern(comp1: Composition, comp2: Composition) -> bool:
     counts2 = sorted([comp2[el] for el in comp2.elements])
     
     return counts1 == counts2
+
+
+def load_training_structures_from_cif_csv(csv_path: str) -> List[Structure]:
+    """
+    Load training structures from CSV file with CIF format.
+    
+    Args:
+        csv_path: Path to CSV file with CIF structures
+        
+    Returns:
+        List of parsed structures
+    """
+    df = pd.read_csv(csv_path)
+    structures = []
+    
+    # Try to find CIF column
+    cif_col = None
+    for col in ['cif', 'CIF', 'structure', 'Structure']:
+        if col in df.columns:
+            cif_col = col
+            break
+    
+    if cif_col is None:
+        print(f"Warning: No CIF/structure column found in {csv_path}")
+        print(f"Available columns: {list(df.columns)}")
+        return []
+    
+    print(f"Loading training structures from column '{cif_col}'...")
+    for idx, row in df.iterrows():
+        cif_str = row[cif_col]
+        if pd.isna(cif_str):
+            continue
+        
+        try:
+            struct = Structure.from_str(str(cif_str), fmt='cif')
+            structures.append(struct)
+        except Exception as e:
+            if idx < 3:  # Show first few errors
+                print(f"Warning: Failed to parse structure at row {idx}: {e}")
+            continue
+    
+    return structures

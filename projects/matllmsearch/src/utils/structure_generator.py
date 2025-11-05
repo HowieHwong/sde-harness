@@ -38,19 +38,52 @@ class StructureGenerator:
         self.task = task
         self.args = args
         
-        # Initialize SDE-Harness Generation (uses main config directory)
+        current_file = Path(__file__).resolve()
+        project_root = current_file.parent.parent.parent.parent.parent 
+        config_dir = project_root / "config"
+        
+        models_file = config_dir / "models.yaml"
+        credentials_file = config_dir / "credentials.yaml"
+        
+        # Verify files exist
+        if not models_file.exists():
+            raise FileNotFoundError(
+                f"Models configuration file not found: {models_file}\n"
+                f"Current file: {current_file}\n"
+                f"Project root: {project_root}\n"
+                f"Config dir: {config_dir}"
+            )
+        if not credentials_file.exists():
+            raise FileNotFoundError(
+                f"Credentials file not found: {credentials_file}\n"
+                f"Current file: {current_file}\n"
+                f"Project root: {project_root}\n"
+                f"Config dir: {config_dir}"
+            )
+        
         self.generator = Generation(
-            models_file="../../config/models.yaml",
-            credentials_file="../../config/credentials.yaml", 
+            models_file=str(models_file),
+            credentials_file=str(credentials_file), 
             model_name=model
         )
 
         # Store generation parameters
-        self.gen_args = {
-            "temperature": temperature,
-            "max_new_tokens": max_tokens,
-            "truncation": True
-        }
+        # Determine if this is a local model or API model
+        # For OpenAI/Anthropic/etc, use max_tokens; for local models, use max_new_tokens
+        is_local_model = model.startswith("local/") or not any(x in model for x in ["openai", "anthropic", "gemini", "deepseek"])
+        
+        if is_local_model:
+            self.gen_args = {
+                "temperature": temperature,
+                "max_new_tokens": max_tokens,
+                "truncation": True
+            }
+        else:
+            # For API models (OpenAI, Anthropic, etc.), use max_tokens
+            self.gen_args = {
+                "temperature": temperature,
+                "max_tokens": max_tokens
+            }
         
         # Initialize SDE-Harness Prompt templates
         self._init_prompt_templates()
@@ -102,12 +135,22 @@ class StructureGenerator:
         responses = []
         for i, instruction in enumerate(instructions):
             try:
-                result = self.generator.generate(prompt=instruction, **self.gen_args)
+                result = self.generator.generate(
+                    prompt=instruction,
+                    model_name=self.model,
+                    **self.gen_args
+                )
                 response_text = result.get("text", "") if isinstance(result, dict) else str(result)
                 responses.append(response_text)
                 
             except Exception as e:
                 print(f"Generation error for instruction {i+1}: {e}")
+                if i == 0:  # Show full error for first failure
+                    import traceback
+                    print(f"Full traceback:")
+                    traceback.print_exc()
+                    print(f"Model: {self.model}")
+                    print(f"Gen args: {self.gen_args}")
                 responses.append("")
         
         # Parse structures from responses
