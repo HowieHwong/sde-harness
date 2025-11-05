@@ -200,13 +200,31 @@ matllmsearch/
 └── README.md
 ```
 
+## Results
+
+Comparison of different methods on crystal structure generation:
+
+| Method | Structural Validity(%) | Comp Validity(%) | Metastability (E_d < 0.1 eV/atom, %) | Metastability (E_d < 0.0 eV/atom, %) | Sun Rate(%) |
+|--------|---------------------|---------------|-----------------------------------|-----------------------------------|----------|
+| CDVAE | 100 | 86.70 | 28.8 | - | - |
+| DiffCSP | 100 | 83.25 | - | 5.06 | 3.34 |
+| GPT-5-mini | 100 | 100 | 58.17 | 12.19 | 10.08 |
+
 ## Output
 
 Results are saved in the specified log directory with the following structure:
 
+### CSG Workflow Output (when using `--generate` or `csg` command):
 - `generations.csv`: Generated structures with properties for each iteration
-- `metrics.csv`: Optimization metrics over iterations  
-- `analysis_report.txt`: Comprehensive analysis summary
+- `metrics.csv`: Optimization metrics over iterations
+
+### Analysis Output (when using `analyze` command):
+- `evaluation_results.json` (or file specified by `--output`): Comprehensive evaluation results including:
+  - Validity metrics (structural, composition)
+  - Diversity metrics (structural, composition)
+  - Novelty metrics (overall, composition, structural, SUN score)
+  - Stability metrics (metastability rates, E-hull statistics)
+  - Success rates
 
 ## Citation
 
@@ -214,8 +232,8 @@ If you use MatLLMSearch in your research, please cite:
 
 ```bibtex
 @misc{gan2025matllmsearch,
-      title={Large Language Models Are Innate Crystal Structure Generators}, 
-      author={Jingru Gan and Peichen Zhong and Yuanqi Du and Yanqiao Zhu and Chenru Duan and Haorui Wang and Carla P. Gomes and Kristin A. Persson and Daniel Schwalbe-Koda and Wei Wang},
+      title={MatLLMSearch: Crystal Structure Discovery with Evolution-Guided Large Language Models}, 
+      author={Jingru Gan and Peichen Zhong and Yuanqi Du and Yanqiao Zhu and Chenru Duan and Haorui Wang and Daniel Schwalbe-Koda and Carla P. Gomes and Kristin A. Persson and Wei Wang},
       year={2025},
       eprint={2502.20933},
       archivePrefix={arXiv},

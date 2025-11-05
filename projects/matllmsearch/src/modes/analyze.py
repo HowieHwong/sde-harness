@@ -31,7 +31,6 @@ def run_analyze(args) -> Dict[str, Any]:
     print("ANALYSIS MODE: Structure Evaluation")
     print("="*80)
     
-    # Check if we should generate structures via API using CSG workflow
     generate_via_api = getattr(args, 'generate', False)
     
     if generate_via_api:
@@ -46,24 +45,18 @@ def run_analyze(args) -> Dict[str, Any]:
         print(f"Generated and deduplicated {len(structures)} unique structures via CSG workflow")
     else:
         # Read structures from file
-        # Determine input file - support both old format (results-path) and new format (input)
         if hasattr(args, 'input') and args.input:
             input_file = Path(args.input)
         elif hasattr(args, 'results_path') and args.results_path:
-            # Old format: look for generations.csv in results_path
+            # Look for generations.csv in results_path
             results_path = Path(args.results_path)
             input_file = results_path / "generations.csv"
             if not input_file.exists():
                 print(f"Error: generations.csv not found in {results_path}")
                 sys.exit(1)
         else:
-            # Default: data/llama_test.csv
-            project_root = Path(__file__).parent.parent.parent
-            input_file = project_root / "data" / "llama_test.csv"
-            if not input_file.exists():
-                print(f"Error: Default input file not found: {input_file}")
-                print("Please specify --input, --results-path, or --generate to use API")
-                sys.exit(1)
+            print("Please specify --input, --results-path, or --generate to use API")
+            sys.exit(1)
         
         print(f"Input file: {input_file}")
         
@@ -76,19 +69,20 @@ def run_analyze(args) -> Dict[str, Any]:
             print(f"Error: No valid structures found in {input_file}")
             sys.exit(1)
         
-        print(f"Loaded {len(structures)} structures")
+        print(f"Loaded {len(structures)} structures from file")
+        
+        print(f"\nDeduplicating {len(structures)} structures...")
+        structures = _deduplicate_structures(structures)
+        print(f"After deduplication: {len(structures)} unique structures")
     
-    # Determine novelty reference set (SUN score reference)
-    # Priority:
-    # 1) If --training-data provided, use it
-    # 2) Otherwise, use the reference pool (seed structures) from --data-path
+    # Novelty reference set (SUN score reference)
     training_structures = []
     if hasattr(args, 'training_data') and args.training_data:
         training_file = Path(args.training_data)
     else:
         training_file = None
     
-    # Determine output file
+    # Output file
     if hasattr(args, 'output') and args.output:
         output_file = Path(args.output)
     elif hasattr(args, 'results_path') and args.results_path:
@@ -218,11 +212,20 @@ def print_summary(results: Dict[str, Any]):
             print(f"  Unique structures: {sd.get('unique_structures', 0)}")
     
     # Novelty metrics
-    if 'overall_novelty' in results:
-        print(f"\nOverall Novelty (SUN score): {results['overall_novelty']:.4f}")
+    if 'novelty' in results:
+        nov = results['novelty']
+        if 'overall_novelty' in results:
+            print(f"\nOverall Novelty (both-novel, no stability filter): {results['overall_novelty']:.4f}")
+            if 'both_novel_count' in nov:
+                print(f"  Both-novel structures: {nov.get('both_novel_count', 0)}")
+        
+        if 'sun_score' in nov:
+            print(f"SUN Score (stable + both-novel, E-hull < 0.0): {nov.get('sun_score', 0):.4f}")
+            if 'sun_both_novel_count' in nov:
+                print(f"  Stable both-novel structures: {nov.get('sun_both_novel_count', 0)}")
     
     if 'composition_novelty' in results:
-        print(f"Composition Novelty: {results['composition_novelty']:.4f}")
+        print(f"\nComposition Novelty: {results['composition_novelty']:.4f}")
         if 'novelty' in results and 'composition_novelty' in results['novelty']:
             cn = results['novelty']['composition_novelty']
             print(f"  Novel compositions: {cn.get('novel_compositions', 0)}")
@@ -239,11 +242,22 @@ def print_summary(results: Dict[str, Any]):
         if 'validity_rate' in sr:
             print(f"\nValidity Rate: {sr.get('validity_rate', 0):.4f}")
             print(f"Success Rate (<0.1 eV): {sr.get('success_rate', 0):.4f}")
-            print(f"Stability Rate (<0.03 eV): {sr.get('stability_rate_0.03', 0):.4f}")
-            print(f"Stability Rate (<0.10 eV): {sr.get('stability_rate_0.10', 0):.4f}")
+        
+        # Metastability rates
+        if 'metastability_0' in sr:
+            print(f"\nMetastability Rates:")
+            print(f"  E-hull < 0.0: {sr.get('metastability_0', 0):.4f}")
+            print(f"  E-hull < 0.03: {sr.get('metastability_0.03', 0):.4f}")
+            print(f"  E-hull < 0.10: {sr.get('metastability_0.10', 0):.4f}")
+        
+        # Backward compatibility labels
+        if 'stability_rate_0.03' in sr:
+            print(f"\nStability Rates (backward compatibility):")
+            print(f"  <0.03 eV: {sr.get('stability_rate_0.03', 0):.4f}")
+            print(f"  <0.10 eV: {sr.get('stability_rate_0.10', 0):.4f}")
     
     if 'm3gnet_metastability' in results:
-        print(f"M3GNet Metastability: {results['m3gnet_metastability']:.4f}")
+        print(f"\nM3GNet Metastability (<0.1 eV): {results['m3gnet_metastability']:.4f}")
             
             # Stability statistics
     if 'stability_stats' in results:

@@ -567,17 +567,20 @@ class StructureEvaluator:
             'total_generated': total_generated,
         }
 
-    def calculate_overall_both_novel(self, structures: List[Structure]) -> Dict[str, Any]:
+    def calculate_overall_novelty(self, structures: List[Structure]) -> Dict[str, Any]:
         """
-        Overall novelty defined as structures that are BOTH composition-novel
-        and structural-novel relative to the reference set.
+        Calculate overall novelty (both composition-novel AND structural-novel) WITHOUT stability requirement.
+        
+        Overall novelty = (structures that are composition-novel AND structural-novel) / (total generated structures)
+        
+        No stability filter is applied. Denominator is total structures (all generated structures).
 
-        Returns fraction and counts.
+        Returns dict with 'overall_novelty', 'both_novel_count', and 'total_structures'.
         """
         total = len(structures)
         if total == 0:
             return {
-                'overall_both_novel': 0.0,
+                'overall_novelty': 0.0,
                 'both_novel_count': 0,
                 'total_structures': 0,
             }
@@ -586,7 +589,7 @@ class StructureEvaluator:
         # If no training data, nothing can be non-novel; treat as zero to avoid inflating
         if not self.training_structures:
             return {
-                'overall_both_novel': 0.0,
+                'overall_novelty': 0.0,
                 'both_novel_count': 0,
                 'total_structures': total,
             }
@@ -605,8 +608,7 @@ class StructureEvaluator:
                 # If composition exists in reference, cannot be both-novel
                 continue
 
-            # Structural novel check (v.
-            # reference set for the same formula; if formula absent, treat as novel structurally)
+            # Structural novel check
             struct_is_novel = True
             refs = self.training_formulas.get(formula, [])
             for ref in refs:
@@ -621,7 +623,94 @@ class StructureEvaluator:
                 both_novel_count += 1
 
         return {
-            'overall_both_novel': both_novel_count / total if total > 0 else 0.0,
+            'overall_novelty': both_novel_count / total if total > 0 else 0.0,
+            'both_novel_count': both_novel_count,
+            'total_structures': total,
+        }
+
+    def calculate_sun(self, structures: List[Structure], 
+                     evaluations: Optional[List[MaterialsEvaluation]] = None) -> Dict[str, Any]:
+        """
+        Calculate SUN (Structures Unique and Novel) rate.
+        
+        SUN rate = (structures that are stable (E-hull < 0.0) AND composition-novel AND structural-novel) / (total generated structures)
+        
+        Requires evaluations to be provided. Only counts structures with E-hull distance < 0.0 (stable).
+        Denominator is always total structures (all generated structures).
+
+        Returns dict with 'sun_score', 'both_novel_count', and 'total_structures'.
+        """
+        total = len(structures)
+        if total == 0:
+            return {
+                'sun_score': 0.0,
+                'both_novel_count': 0,
+                'total_structures': 0,
+            }
+
+        both_novel_count = 0
+        # If no training data, nothing can be non-novel; treat as zero to avoid inflating
+        if not self.training_structures:
+            return {
+                'sun_score': 0.0,
+                'both_novel_count': 0,
+                'total_structures': total,
+            }
+
+        # Filter by stability - REQUIRED for SUN score
+        if evaluations is None or len(evaluations) != len(structures):
+            # Without evaluations, cannot calculate SUN (requires stability info)
+            return {
+                'sun_score': 0.0,
+                'both_novel_count': 0,
+                'total_structures': total,
+            }
+
+        # Only consider structures with E-hull < 0.0 (stable)
+        stable_indices = []
+        for i, (struct, ev) in enumerate(zip(structures, evaluations)):
+            try:
+                if ev and ev.valid and ev.e_hull_distance is not None:
+                    if not (np.isnan(ev.e_hull_distance) or np.isinf(ev.e_hull_distance)):
+                        if ev.e_hull_distance < 0.0:
+                            stable_indices.append(i)
+            except Exception:
+                continue
+        
+        # Only check stable structures for novelty
+        structures_to_check = [structures[i] for i in stable_indices]
+
+        # Pre-built training_formulas is expected
+        for struct in structures_to_check:
+            try:
+                formula = struct.composition.reduced_formula
+            except Exception:
+                continue
+
+            # Composition novel check
+            comp_is_novel = formula not in self.training_formulas
+
+            if not comp_is_novel:
+                # If composition exists in reference, cannot be both-novel
+                continue
+
+            # Structural novel check
+            # reference set for the same formula; if formula absent, treat as novel structurally
+            struct_is_novel = True
+            refs = self.training_formulas.get(formula, [])
+            for ref in refs:
+                try:
+                    if struct.matches(ref, scale=True, attempt_supercell=False):
+                        struct_is_novel = False
+                        break
+                except Exception:
+                    continue
+
+            if struct_is_novel:
+                both_novel_count += 1
+
+        return {
+            'sun_score': both_novel_count / total if total > 0 else 0.0,
             'both_novel_count': both_novel_count,
             'total_structures': total,
         }
@@ -727,9 +816,12 @@ class StructureEvaluator:
         if not evaluations:
             return {
                 'validity_rate': 0.0,
-                'stability_rate_0.03': 0.0,
-                'stability_rate_0.10': 0.0,
+                'metastability_0': 0.0,
+                'metastability_0.03': 0.0,
+                'metastability_0.10': 0.0,
                 'm3gnet_metastability': 0.0,
+                'stability_rate_0.03': 0.0,  # Keep for backward compatibility
+                'stability_rate_0.10': 0.0,  # Keep for backward compatibility
                 'success_rate': 0.0,
                 'total_structures': 0
             }
@@ -738,16 +830,23 @@ class StructureEvaluator:
         valid_count = sum(1 for eval in evaluations if eval.valid)
         valid_evals = [eval for eval in evaluations if eval.valid]
         
-        # Stability rates
+        # Stability rates (metastability thresholds)
+        stable_0 = sum(1 for eval in valid_evals 
+                      if not (np.isnan(eval.e_hull_distance) or np.isinf(eval.e_hull_distance))
+                      and eval.e_hull_distance < 0.0)
         stable_003 = sum(1 for eval in valid_evals 
                         if not (np.isnan(eval.e_hull_distance) or np.isinf(eval.e_hull_distance))
-                        and eval.e_hull_distance <= 0.03)
+                        and eval.e_hull_distance < 0.03)
         stable_01 = sum(1 for eval in valid_evals 
                        if not (np.isnan(eval.e_hull_distance) or np.isinf(eval.e_hull_distance))
-                       and eval.e_hull_distance <= 0.10)
+                       and eval.e_hull_distance < 0.10)
         
-        # M3GNet metastability: E-hull < 0.1 eV/atom (same as stable_01)
-        m3gnet_metastability = stable_01 / total if total > 0 else 0.0
+        # Metastability rates
+        metastability_0 = stable_0 / total if total > 0 else 0.0
+        metastability_003 = stable_003 / total if total > 0 else 0.0
+        metastability_01 = stable_01 / total if total > 0 else 0.0
+        # M3GNet metastability: E-hull < 0.1 eV/atom (same as metastability_01)
+        m3gnet_metastability = metastability_01
         
         # Success rate: valid AND stable (< 0.1 eV/atom)
         success_count = sum(1 for eval in valid_evals 
@@ -757,11 +856,15 @@ class StructureEvaluator:
         return {
             'validity_rate': valid_count / total if total > 0 else 0.0,
             'valid_structures': valid_count,
-            'stability_rate_0.03': stable_003 / total if total > 0 else 0.0,
-            'stability_rate_0.10': stable_01 / total if total > 0 else 0.0,
+            'metastability_0': metastability_0,
+            'metastability_0.03': metastability_003,
+            'metastability_0.10': metastability_01,
             'm3gnet_metastability': m3gnet_metastability,
+            'stable_structures_0': stable_0,
             'stable_structures_0.03': stable_003,
             'stable_structures_0.10': stable_01,
+            'stability_rate_0.03': metastability_003,  # Keep for backward compatibility
+            'stability_rate_0.10': metastability_01,  # Keep for backward compatibility
             'success_rate': success_count / total if total > 0 else 0.0,
             'success_structures': success_count,
             'total_structures': total
@@ -836,14 +939,16 @@ class StructureEvaluator:
             # Add M3GNet metastability to results
             results['m3gnet_metastability'] = success_metrics['m3gnet_metastability']
 
-            # Compute composition/structural novelty and overall as BOTH novel
+            # Compute composition/structural novelty, overall novelty, and SUN rate
             novelty = self.calculate_novelty(structures)
-            both = self.calculate_overall_both_novel(structures)
-            results['overall_novelty'] = both['overall_both_novel']
+            overall_novelty_result = self.calculate_overall_novelty(structures)  # No stability requirement
+            sun_result = self.calculate_sun(structures, evaluations=evaluations)  # With stability requirement (E-hull < 0.0)
+            results['overall_novelty'] = overall_novelty_result['overall_novelty']
             results['novelty'] = {
-                'sun_score': both['overall_both_novel'],  # keep key name for compatibility
-                'both_novel_count': both['both_novel_count'],
-                'total_structures': both['total_structures'],
+                'sun_score': sun_result['sun_score'],
+                'both_novel_count': overall_novelty_result['both_novel_count'],
+                'sun_both_novel_count': sun_result['both_novel_count'],
+                'total_structures': overall_novelty_result['total_structures'],
                 'composition_novelty': novelty['composition_novelty'],
                 'structural_novelty': novelty['structural_novelty'],
             }
@@ -855,14 +960,14 @@ class StructureEvaluator:
                 'total_structures': len(structures)
             }
 
-            # Without stability, compute both-novel overall on full set (no prints)
+            # Without stability, compute overall novelty only (SUN requires stability)
             novelty = self.calculate_novelty(structures)
-            both = self.calculate_overall_both_novel(structures)
-            results['overall_novelty'] = both['overall_both_novel']
+            overall_novelty_result = self.calculate_overall_novelty(structures)  # No stability requirement
+            results['overall_novelty'] = overall_novelty_result['overall_novelty']
             results['novelty'] = {
-                'sun_score': both['overall_both_novel'],
-                'both_novel_count': both['both_novel_count'],
-                'total_structures': both['total_structures'],
+                'sun_score': 0.0,  # Cannot calculate SUN without stability
+                'both_novel_count': overall_novelty_result['both_novel_count'],
+                'total_structures': overall_novelty_result['total_structures'],
                 'composition_novelty': novelty['composition_novelty'],
                 'structural_novelty': novelty['structural_novelty'],
             }
