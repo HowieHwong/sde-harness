@@ -77,12 +77,73 @@ python cli.py csp \
 ```
 
 ### Analysis
-Analyze experimental results:
+The `analyze` command evaluates generated structures and computes comprehensive metrics including:
+- Structural validity and composition validity
+- Structural diversity and composition diversity
+- Structural novelty and composition novelty (vs reference pool)
+- Overall novelty (fraction of structures that are both compositionally and structurally novel)
+- M3GNet metastability
+- Stability rates (CHGNet)
 
+#### Evaluate Existing Results
+
+**Option 1: From a CSV file**
 ```bash
 python cli.py analyze \
-    --results-path logs/my_csg_experiment \
-    --experiment-name my_analysis
+    --input data/llama_test.csv \
+    --output evaluation_results.json \
+    --data-path data/band_gap_processed_5000.csv
+```
+
+**Option 2: From a previous CSG run directory**
+```bash
+python cli.py analyze \
+    --results-path logs/analyze_generation \
+    --output reevaluated_results.json \
+    --data-path data/band_gap_processed_5000.csv
+```
+This will look for `generations.csv` in the specified results path.
+
+#### Generate and Evaluate via API
+
+Generate structures using the CSG evolutionary workflow with API models and then evaluate:
+
+```bash
+python cli.py analyze --generate \
+    --model openai/gpt-5-mini \
+    --data-path data/band_gap_processed_5000.csv \
+    --max-iter 10 \
+    --population-size 10 \
+    --reproduction-size 5 \
+    --parent-size 2 \
+    --output gpt5_results.json
+```
+
+**Key parameters for API generation:**
+- `--generate`: Flag to enable API generation (uses CSG workflow)
+- `--model`: Model to use (e.g., `openai/gpt-5-mini`, `openai/gpt-4o-mini`)
+- `--data-path`: Path to seed structures CSV (used as reference pool for novelty)
+- `--max-iter`: Number of evolutionary iterations
+- `--population-size`: Initial population size
+- `--reproduction-size`: Number of offspring per generation
+- `--parent-size`: Number of parent structures per group
+
+**Note:** All generated structures are kept and deduplicated after all iterations complete before evaluation.
+
+#### Finding Results from Previous Runs
+
+When you run `analyze --generate`, the CSG workflow saves intermediate results to:
+- `logs/analyze_generation/generations.csv`: All generated structures with properties
+- `logs/analyze_generation/metrics.csv`: Per-iteration metrics
+
+The final evaluation summary is saved to the `--output` file you specify (e.g., `gpt5_results.json`).
+
+To re-evaluate a previous run:
+```bash
+python cli.py analyze \
+    --results-path logs/analyze_generation \
+    --output new_evaluation.json \
+    --data-path data/band_gap_processed_5000.csv
 ```
 
 ## Configuration Options
@@ -107,23 +168,6 @@ Model configuration is handled via the main SDE-Harness `config/models.yaml` and
 
 MatLLMSearch is **fully integrated** with SDE-Harness core components:
 
-### **Core Integration**
-- **`sde_harness.core.generation.Generation`**: Unified LLM interface replacing custom LLMManager
-  - Supports local models, OpenAI, Anthropic, DeepSeek
-  - Configuration-driven via `config/models.yaml` and `config/credentials.yaml`
-  - Built-in async support and resource management
-
-- **`sde_harness.core.oracle.Oracle`**: MaterialsOracle extends base Oracle class
-  - Custom materials metrics: `stability`, `bulk_modulus`, `validity`, `multi_objective` 
-  - Multi-round metrics: `materials_improvement`, `convergence_rate`
-  - Batch evaluation and trend analysis
-
-- **`sde_harness.core.prompt.Prompt`**: Dynamic prompting with custom templates
-  - Zero-shot generation prompts
-  - Few-shot generation with reference structures
-  - Crystal structure prediction prompts
-  - Variable substitution and template management
-
 ### **Materials-Specific Components**
 - **StructureGenerator**: Uses Generation class for LLM-based structure creation
 - **MaterialsOracle**: Evaluates structures using CHGNet/ORB for stability and properties
@@ -135,7 +179,7 @@ MatLLMSearch is **fully integrated** with SDE-Harness core components:
 matllmsearch/
 ├── cli.py                          # Main command-line interface
 # Configuration files are in the main SDE-Harness config/ directory:
-# ../../config/models.yaml           # Model configurations (MatLLMSearch models included)
+# ../../config/models.yaml           # Model configurations
 # ../../config/credentials.yaml      # API credentials
 ├── data/                           # Data files directory
 │   ├── band_gap_processed_5000.csv     # Seed structures (optional)
@@ -146,7 +190,7 @@ matllmsearch/
 │   │   ├── csp.py                 # Crystal Structure Prediction mode  
 │   │   └── analyze.py             # Analysis mode
 │   ├── utils/
-│   │   ├── structure_generator.py  # LLM-based structure generator (uses SDE-Harness Generation)
+│   │   ├── structure_generator.py  # LLM-based structure generator
 │   │   ├── stability_calculator.py # Structure stability evaluation
 │   │   ├── data_loader.py         # Data loading utilities
 │   │   └── config.py              # Configuration and prompts
@@ -156,22 +200,31 @@ matllmsearch/
 └── README.md
 ```
 
+## Results
+
+Comparison of different methods on crystal structure generation:
+
+| Method | Structural Validity(%) | Comp Validity(%) | Metastability (E_d < 0.1 eV/atom, %) | Metastability (E_d < 0.0 eV/atom, %) | Sun Rate(%) |
+|--------|---------------------|---------------|-----------------------------------|-----------------------------------|----------|
+| CDVAE | 100 | 86.70 | 28.8 | - | - |
+| DiffCSP | 100 | 83.25 | - | 5.06 | 3.34 |
+| GPT-5-mini | 100 | 100 | 58.17 | 12.19 | 10.08 |
+
 ## Output
 
 Results are saved in the specified log directory with the following structure:
 
+### CSG Workflow Output (when using `--generate` or `csg` command):
 - `generations.csv`: Generated structures with properties for each iteration
-- `metrics.csv`: Optimization metrics over iterations  
-- `analysis_report.txt`: Comprehensive analysis summary
+- `metrics.csv`: Optimization metrics over iterations
 
-## Integration with SDE-Harness
-
-This implementation demonstrates how to integrate domain-specific workflows with the SDE-Harness framework:
-
-1. **ProjectBase inheritance**: Main classes inherit from `sde_harness.base.ProjectBase`
-2. **Standard interfaces**: Components implement SDE-Harness Generation and Oracle interfaces
-3. **Workflow integration**: Uses SDE-Harness Workflow for optimization loops
-4. **Consistent patterns**: Follows SDE-Harness patterns for CLI, configuration, and output
+### Analysis Output (when using `analyze` command):
+- `evaluation_results.json` (or file specified by `--output`): Comprehensive evaluation results including:
+  - Validity metrics (structural, composition)
+  - Diversity metrics (structural, composition)
+  - Novelty metrics (overall, composition, structural, SUN score)
+  - Stability metrics (metastability rates, E-hull statistics)
+  - Success rates
 
 ## Citation
 
@@ -179,8 +232,8 @@ If you use MatLLMSearch in your research, please cite:
 
 ```bibtex
 @misc{gan2025matllmsearch,
-      title={Large Language Models Are Innate Crystal Structure Generators}, 
-      author={Jingru Gan and Peichen Zhong and Yuanqi Du and Yanqiao Zhu and Chenru Duan and Haorui Wang and Carla P. Gomes and Kristin A. Persson and Daniel Schwalbe-Koda and Wei Wang},
+      title={MatLLMSearch: Crystal Structure Discovery with Evolution-Guided Large Language Models}, 
+      author={Jingru Gan and Peichen Zhong and Yuanqi Du and Yanqiao Zhu and Chenru Duan and Haorui Wang and Daniel Schwalbe-Koda and Carla P. Gomes and Kristin A. Persson and Wei Wang},
       year={2025},
       eprint={2502.20933},
       archivePrefix={arXiv},

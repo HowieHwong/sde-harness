@@ -30,7 +30,9 @@ def main():
 Example usage:
   python cli.py csg --model meta-llama/Meta-Llama-3.1-70B-Instruct --population-size 100 --max-iter 5
   python cli.py csp --compound Ag6O2 --model meta-llama/Meta-Llama-3.1-8B-Instruct --population-size 50
-  python cli.py analyze --results-path results/experiment_1
+  python cli.py analyze --input data/llama_test.csv --output evaluation_results.json
+  python cli.py analyze --results-path results/experiment_1  # Uses generations.csv from results path
+  python cli.py analyze --generate --num-structures 10 --model openai/gpt-5-mini --output api_results.json # Generate via API
         """,
     )
 
@@ -97,10 +99,46 @@ Example usage:
         "analyze",
         help="Analyze experimental results"
     )
-    analyze_parser.add_argument("--results-path", type=str, required=True,
-                              help="Path to results directory")
+    analyze_parser.add_argument("--input", type=str, default=None,
+                           help="Input CSV file with structures (default: data/llama_test.csv)")
+    analyze_parser.add_argument("--results-path", type=str, default=None,
+                              help="Path to results directory (alternative to --input, looks for generations.csv)")
+    analyze_parser.add_argument("--generate", action="store_true",
+                           help="Generate structures via API instead of reading from file")
+    analyze_parser.add_argument("--model", type=str, default="openai/gpt-4o-mini",
+                           help="Model to use for API generation (default: openai/gpt-4o-mini)")
+    analyze_parser.add_argument("--temperature", type=float, default=1.0,
+                           help="Temperature for generation (default: 1.0)")
+    analyze_parser.add_argument("--max-tokens", type=int, default=4000,
+                           help="Max tokens for generation (default: 4000)")
+    analyze_parser.add_argument("--fmt", choices=["poscar", "cif"], default="poscar",
+                           help="Structure format for generation (default: poscar)")
+    analyze_parser.add_argument("--data-path", type=str, default="data/band_gap_processed_5000.csv",
+                           help="Path to seed structures data file for reference pool (default: data/band_gap_processed_5000.csv)")
+    analyze_parser.add_argument("--max-iter", type=int, default=1,
+                           help="Maximum iterations for generation (default: 1)")
+    analyze_parser.add_argument("--population-size", type=int, default=None,
+                           help="Population size for generation (default: same as --num-structures)")
+    analyze_parser.add_argument("--reproduction-size", type=int, default=5,
+                           help="Number of offspring per generation (default: 5)")
+    analyze_parser.add_argument("--parent-size", type=int, default=2,
+                           help="Number of parent structures per group (default: 2)")
+    analyze_parser.add_argument("--seed", type=int, default=42,
+                           help="Random seed (default: 42)")
+    analyze_parser.add_argument("--training-data", type=str, default=None,
+                           help="Training data file for novelty calculation (default: data/mp_20/train.csv)")
+    analyze_parser.add_argument("--output", type=str, default=None,
+                           help="Output JSON file for results")
     analyze_parser.add_argument("--experiment-name", type=str, default="experiment",
-                              help="Experiment name (default: experiment)")
+                              help="Experiment name (used when --results-path is specified)")
+    analyze_parser.add_argument("--limit", type=int, default=0,
+                           help="Limit number of structures to evaluate (0 = all, for faster testing)")
+    analyze_parser.add_argument("--mlip", type=str, default="chgnet",
+                           help="Machine learning interatomic potential (default: chgnet)")
+    analyze_parser.add_argument("--ppd-path", type=str, default="data/2023-02-07-ppd-mp.pkl.gz",
+                           help="Path to patched phase diagram file")
+    analyze_parser.add_argument("--device", type=str, default="cuda", choices=["cuda", "cpu"],
+                           help="Device for computation (default: cuda)")
 
     args = parser.parse_args()
 
