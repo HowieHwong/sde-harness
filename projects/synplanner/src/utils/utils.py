@@ -37,12 +37,23 @@ def query_LLM(
         {"role": "user", "content": query},
     ]
 
-    resp = CLIENT.chat.completions.create(
-        model=model,
-        messages=messages,
-        temperature=temperature,
-        max_tokens=max_tokens,
-    )
+    if model == "gpt-4o":
+        resp = CLIENT.chat.completions.create(
+            model=model,
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+    elif model == "gpt-5-mini":
+        resp = CLIENT.chat.completions.create(
+            model=model,
+            messages=messages,
+            temperature=1,
+            max_completion_tokens=max_tokens,
+        )
+    else:
+        # TODO: This will never trigger as the entry point checks the model string but making a TODO here for models to be added later
+        raise ValueError(f"Model {model} not supported")
 
     content = resp.choices[0].message.content
     messages.append({"role": "assistant", "content": content})

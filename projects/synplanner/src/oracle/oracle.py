@@ -31,6 +31,7 @@ class Oracle:
             self.freq_log = args.freq_log
         self.route_buffer = {} if route_buffer is None else route_buffer
         self.reaction_cache = dict() # mol_smiles: [reaction]
+        self.llm_calls = 0  # Track LLM calls
 
         self.last_log = 0
         self.sc_Oracle = SCScorer()
@@ -43,8 +44,13 @@ class Oracle:
     
     @property
     def finish(self) -> bool:
-        """Check if the maximum number of oracle calls has been reached."""
-        return len(self.route_buffer) >= self.max_oracle_calls
+        """
+        Check if the maximum number of LLM calls has been reached.
+
+        NOTE: In the original code, the finish condition was based on the number of unique routes scored.
+              Since the LLM does not always return a valid route, generally # LLM calls > # unique routes scored.
+        """
+        return self.llm_calls >= self.max_oracle_calls
     
     def __len__(self) -> int:
         """Return the number of routes in the buffer."""

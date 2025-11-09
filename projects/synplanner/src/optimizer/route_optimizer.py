@@ -90,7 +90,6 @@ class RouteOptimizer(BaseOptimizer):
         args: Dict[str, Any]
     ) -> None:
         super().__init__(args)
-        self.llm_calls = 0
 
     def initialization(
         self,
@@ -124,9 +123,15 @@ class RouteOptimizer(BaseOptimizer):
                 # Query the LLM for the initial route
                 _, answer = query_LLM(
                     query=initialization_prompt,
+                    model=self.args.model,
                     temperature=temperature,
                 )
-                self.llm_calls += 1
+                self.oracle.llm_calls += 1
+                
+                # Check if budget is exhausted
+                if self.finish:
+                    logging.info(f"LLM budget exhausted during initialization ({self.oracle.llm_calls} calls)")
+                    return None
 
                 # Extract the route from the LLM response
                 match = re.search(r"<ROUTE>(.*?)<ROUTE>", answer, re.DOTALL)
@@ -233,9 +238,15 @@ class RouteOptimizer(BaseOptimizer):
                 # Query the LLM to generate a modified route
                 _, new_a = query_LLM(
                     query=mutation_prompt,
+                    model=self.args.model,
                     temperature=temperature
                 )
-                self.llm_calls += 1
+                self.oracle.llm_calls += 1
+                
+                # Check if budget is exhausted
+                if self.finish:
+                    logging.info(f"LLM budget exhausted during mutation ({self.oracle.llm_calls} calls)")
+                    return None
 
                 # Extract the modified route from LLM response
                 match = re.search(r"<ROUTE>(.*?)<ROUTE>", new_a, re.DOTALL)
@@ -300,7 +311,7 @@ class RouteOptimizer(BaseOptimizer):
                 break
 
             except Exception as e:
-                logging.error(f"MUTATION ERROR (usually LLM proposed route error and is benign): {e} - Retrying...")
+                logging.error(f"MUTATION ERROR (usually LLM proposed route has an error and is benign - will try again. Note that it is possible that some LLMs will not be able to propose a valid route at all): {e} - Retrying...")
                 continue
 
         return final_route_item
@@ -331,7 +342,13 @@ class RouteOptimizer(BaseOptimizer):
 
         with ThreadPoolExecutor() as executor:
             futures = [executor.submit(self.initialization, target, rag_tuples, float(config["temperature"])) for _ in range(config["population_size"])]
-            starting_population = [future.result() for future in futures]
+            results = [future.result() for future in futures]
+            starting_population = [r for r in results if r is not None]
+
+        # Check if budget was exhausted during initialization
+        if len(starting_population) == 0 or self.finish:
+            logging.info(f"LLM budget exhausted during initialization. Terminating early.")
+            return
 
         # Initial population
         population_routes = starting_population
@@ -349,7 +366,7 @@ class RouteOptimizer(BaseOptimizer):
                 self.sort_buffer()
                 if 0 in population_scores:
                     self.log_intermediate(finish=True) 
-                    logging.info(f"Solved a route in {self.llm_calls} LLM calls, ending...")
+                    logging.info(f"Found a route in {self.oracle.llm_calls} LLM calls, ending...")
                     for route in population_routes:
                         reward = route.get_reward()
                         if reward == 0:
@@ -377,6 +394,11 @@ class RouteOptimizer(BaseOptimizer):
                     if returned_routes[i] is not None:
                         if check_distinct_route(offspring_routes, returned_routes[i]): offspring_routes.append(returned_routes[i])
 
+            # Check if budget exhausted during mutation
+            if self.finish:
+                logging.info(f"Finished in {self.oracle.llm_calls} LLM calls. Route not found, ending...")              
+                break
+
             # Add new population
             population_routes += offspring_routes
             all_routes = all_routes + offspring_routes
@@ -400,7 +422,7 @@ class RouteOptimizer(BaseOptimizer):
             if len(self.oracle) > 5:
                 if 0 in population_scores:
                     self.log_intermediate(finish=True)  
-                    logging.info(f"Found a route in {self.llm_calls} LLM calls, ending...")
+                    logging.info(f"Found a route in {self.oracle.llm_calls} LLM calls, ending...")
                     for route in population_routes:
                         reward = route.get_reward()
                         if reward == 0:
@@ -412,5 +434,5 @@ class RouteOptimizer(BaseOptimizer):
                     break
   
             if self.finish:   
-                logging.info(f"Finished in {self.llm_calls} LLM calls. Route not found, ending...")              
+                logging.info(f"Finished in {self.oracle.llm_calls} LLM calls. Route not found, ending...")              
                 break

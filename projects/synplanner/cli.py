@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-LLM-Syn-Planner - LLM-based Retrosynthesis Pathway Design
+LLM-Syn-Planner - LLM-based Retrosynthesis Route Planning
 """
 from typing import Tuple, List
 import argparse
@@ -19,8 +19,23 @@ from src.utils.chemistry_utils import MORGAN_FP_GENERATOR
 
 TRAIN_DATA = os.path.join(os.path.dirname(__file__), "dataset", "routes_train.pkl")
 VAL_DATA = os.path.join(os.path.dirname(__file__), "dataset", "routes_val.pkl")
+USPTO_EASY_DATA = os.path.join(os.path.dirname(__file__), "dataset", "simple_200.pkl")
+TEST_HARD_DATA = os.path.join(os.path.dirname(__file__), "dataset", "routes_possible_test_hard.pkl")
+PISTACHIO_REACHABLE_DATA = os.path.join(os.path.dirname(__file__), "dataset", "pistachio_reachable_targets.txt")
+PISTACHIO_HARD_DATA = os.path.join(os.path.dirname(__file__), "dataset", "pistachio_hard_targets.txt")
 FPS_FILE = os.path.join(os.path.dirname(__file__), "dataset", "reference_fps.pkl")
 
+
+def format_dict_for_logging(
+    d: dict, 
+    name: str
+) -> str:
+    """Format a dictionary for logging."""
+    formatted_str = f"{name}: {{\n"
+    for key, value in d.items():
+        formatted_str += f"\t'{key}': {value},\n"
+    formatted_str = formatted_str.rstrip(',\n') + "\n}"
+    return formatted_str
 
 def get_reference_routes() -> Tuple[List[str], List[List[str]]]:
     """Load reference routes from the training and validation datasets."""
@@ -49,10 +64,43 @@ def get_reference_morgan_fps(reference_target_list: List[str]) -> List[int]:
 
     return all_fps
 
+def check_args(args: argparse.Namespace) -> None:
+    """Check arguments are valid/complete."""
+    assert os.path.exists("./dataset"), "dataset directory not found, please download the required data following the README"
+    assert not (args.target_smiles is None and args.dataset is None), "Either target_smiles or dataset must be specified"
+    
+    if args.dataset is not None:
+        valid_datasets = ["uspto-easy", "uspto-190", "pistachio-reachable", "pistachio-hard"]
+        assert args.dataset in valid_datasets, f"dataset must be one of {valid_datasets}, got {args.dataset}"
+        
+    assert os.getenv("OPENAI_API_KEY") is not None, "OPENAI_API_KEY is not set"
+    # TODO: Add more models
+    assert args.model in ["gpt-4o", "gpt-5-mini"], f"model must be one of ['gpt-4o', 'gpt-5-mini'], got {args.model}"
+
+def get_targets(dataset: str) -> List[str]:
+    """Get targets from the specified dataset."""
+    if dataset == "uspto-easy":
+        with open(USPTO_EASY_DATA, "rb") as file:
+            return pickle.load(file)
+
+    elif dataset == "uspto-190":
+        with open(TEST_HARD_DATA, "rb") as file:
+            return [route[0].split(">>")[0] for route in pickle.load(file)]
+
+    elif dataset == "pistachio-reachable":
+        with open(PISTACHIO_REACHABLE_DATA, "r") as file:
+            return [eval(line)[0] for line in file]
+
+    elif dataset == "pistachio-hard":
+        with open(PISTACHIO_HARD_DATA, "r") as file:
+            return [eval(line)[0] for line in file]
+
 def main() -> None:
     """Main entry point for the LLM-Syn-Planner CLI."""
     parser = argparse.ArgumentParser()
-    parser.add_argument("--target_smiles", default=None, type=str, required=True)
+    parser.add_argument("--target_smiles", default=None, type=str, required=False)
+    parser.add_argument("--dataset", default=None, type=str, required=False)
+    parser.add_argument("--model", default="gpt-4o", type=str, required=False)
     parser.add_argument("--config_default", default="./src/hparams_default.yaml")
     parser.add_argument("--output_dir", type=str, default="./synplanner_results")
     parser.add_argument("--temperature", type=float, default=0.7)
@@ -61,26 +109,38 @@ def main() -> None:
     parser.add_argument("--seed", type=int, nargs="+", default=[0])
     args = parser.parse_args()
 
-    assert os.getenv("OPENAI_API_KEY") is not None, "OPENAI_API_KEY is not set"
-
+    # Check arguments are valid/complete
+    check_args(args)
+    
     start_time = time.perf_counter()
 
     config_default = yaml.safe_load(open(args.config_default))
 
+    # TODO: Could add temperature to output directory name but some models don't support it (e.g., gpt-5-mini only temperature=1)
+    #       This can be easily solved by adding checks to check_args()
+    if args.dataset is not None: 
+        args.output_dir = os.path.join(args.output_dir, args.model, args.dataset, str(args.max_oracle_calls))
+    else: 
+        args.output_dir = os.path.join(args.output_dir, args.model, str(args.max_oracle_calls))
     os.makedirs(args.output_dir, exist_ok=True)
+
     setup_logging(os.path.join(args.output_dir, "log.log"))
     logging.info("=" * 60)
-    logging.info("🧪 LLM-Syn-Planner - Starting synthetic route planning")
-    logging.info("=" * 60)
-    logging.info(f"📋 Arguments: {args}")
-    logging.info(f"⚙️  Hyperparameters: {config_default}")
+    logging.info("🧪 LLM-Syn-Planner - Starting synthesis route planning")
+    logging.info("=" * 60)    
+    logging.info(format_dict_for_logging(vars(args), "📋 Arguments"))
+    logging.info(format_dict_for_logging(config_default, "⚙️  Hyperparameters"))
     logging.info("=" * 60)
 
     # Get reference retrosynthesis routes
     reference_target_list, reference_route_list = get_reference_routes()
 
-    # Get input SMILES strings
-    input_smiles = [line.strip() for line in open(args.target_smiles)] if os.path.isfile(args.target_smiles) else [args.target_smiles]
+    # Get targets either from input SMILES, input file containing SMILES, or from the specified dataset
+    if args.dataset is not None: 
+        input_smiles = get_targets(args.dataset)
+    else: 
+        input_smiles = [line.strip() for line in open(args.target_smiles)] if os.path.isfile(args.target_smiles) else [args.target_smiles]
+
     input_valid_smiles = [s for s in input_smiles if Chem.MolFromSmiles(s) is not None]
     if not input_valid_smiles: raise ValueError("No valid SMILES strings found in input")
     logging.info(f"Found {len(input_valid_smiles)}/{len(input_smiles)} valid SMILES strings in input")
@@ -90,13 +150,13 @@ def main() -> None:
 
     # Run the optimizer
     for seed in args.seed:
-        for idx in range(len(input_valid_smiles)):
+        for target in input_valid_smiles:
             logging.info("=" * 60)
-            logging.info(f"Searching synthetic routes for: {input_valid_smiles[idx]}")
+            logging.info(f"Searching synthesis routes for: {target}")
             logging.info("=" * 60)
             optimizer = RouteOptimizer(args)  # Re-initialization for clean state
             optimizer.optimize(
-                target=input_valid_smiles[idx], 
+                target=target, 
                 route_list=reference_route_list, 
                 all_fps=all_fps, 
                 config=config_default, 
