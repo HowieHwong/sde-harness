@@ -90,6 +90,7 @@ class RouteOptimizer(BaseOptimizer):
         args: Dict[str, Any]
     ) -> None:
         super().__init__(args)
+        self.cost = 0
 
     def initialization(
         self,
@@ -121,12 +122,13 @@ class RouteOptimizer(BaseOptimizer):
                 )
 
                 # Query the LLM for the initial route
-                _, answer = query_LLM(
+                _, answer, cost = query_LLM(
                     query=initialization_prompt,
                     model=self.args.model,
                     temperature=temperature,
                 )
                 self.oracle.llm_calls += 1
+                self.cost += cost
                 
                 # Check if budget is exhausted
                 if self.finish:
@@ -236,12 +238,13 @@ class RouteOptimizer(BaseOptimizer):
                     reaction_cache=self.oracle.reaction_cache
                 )
                 # Query the LLM to generate a modified route
-                _, new_a = query_LLM(
+                _, new_a, cost = query_LLM(
                     query=mutation_prompt,
                     model=self.args.model,
                     temperature=temperature
                 )
-                self.oracle.llm_calls += 1
+                self.oracle.llm_calls += 1  
+                self.cost += cost
                 
                 # Check if budget is exhausted
                 if self.finish:
@@ -323,7 +326,7 @@ class RouteOptimizer(BaseOptimizer):
         all_fps: List[int],
         config: Dict[str, Any]
     ) -> None:
-        """Main optimization loop for finding synthetic routes."""
+        """Main optimization loop for finding synthesis routes."""
         
         target = sanitize_smiles(target)
         fp = MORGAN_FP_GENERATOR(target)

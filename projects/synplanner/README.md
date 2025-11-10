@@ -12,6 +12,8 @@ Differences to Original Code
 ----------------------------
 * The code has been refactored
 
+* [LiteLLM](https://docs.litellm.ai/) used in place of the [OpenAI API](https://platform.openai.com/docs/overview) as the entry point to various LLMs
+
 * The code also requires use of the [Synthetic Complexity Score (SCScore)](https://github.com/connorcoley/scscore) - following the original code, this repository is directly included in `./src` but unused data and model checkpoints have been removed
 
 * In the future, some dependencies will be removed (e.g., `Syntheseus` retrosynthesis framework)
@@ -26,9 +28,11 @@ Installation
    source env_setup.sh
    ```
 
-2. Set Your API KEY:
+2. Set Your API KEY (not all keys have to be set, just the ones you want to use):
    ```bash
    export OPENAI_API_KEY="your-api-key-here"
+   export ANTHROPIC_API_KEY="your-api-key-here"
+   export XAI_API_KEY="your-api-key-here"
    ```
 
 3. Download required data (copied the link from the original repository), unzip, and add it to the repository:
@@ -80,9 +84,9 @@ Benchmark on Pre-defined Target Sets
 sh run_benchmark.sh
 ```
 This script runs a sweep of the following:
-   - **model** = {"gpt-4o", "gpt-5-mini"}
-   - **datase**t = {"uspto-easy", "uspto-190", "pistachio-reachable", "pistachio-hard"}
-   - **max_oracle_calls** = {100, 300, 500}
+   - **model** = ("gpt-4o" "gpt-5" "gpt-5-mini" "claude-sonnet-4-5" "grok-4" "deepseek-reasoner")
+   - **datase**t = {"uspto-190", "pistachio-hard"}
+   - **max_oracle_calls** = {100}
 
 *Modify the script to run more/less configurations.*
 

@@ -73,9 +73,13 @@ def check_args(args: argparse.Namespace) -> None:
         valid_datasets = ["uspto-easy", "uspto-190", "pistachio-reachable", "pistachio-hard"]
         assert args.dataset in valid_datasets, f"dataset must be one of {valid_datasets}, got {args.dataset}"
         
-    assert os.getenv("OPENAI_API_KEY") is not None, "OPENAI_API_KEY is not set"
-    # TODO: Add more models
-    assert args.model in ["gpt-4o", "gpt-5-mini"], f"model must be one of ['gpt-4o', 'gpt-5-mini'], got {args.model}"
+    assert args.model in ["gpt-4o", "gpt-5", "gpt-5-mini", "claude-sonnet-4-5", "grok-4", "deepseek-reasoner"], f"model must be one of ['gpt-4o', 'gpt-5', 'gpt-5-mini', 'claude-sonnet-4-5', 'grok-4', 'deepseek-reasoner'], got {args.model}"
+    if args.model in ["gpt-4o", "gpt-5", "gpt-5-mini"]: 
+        assert os.getenv("OPENAI_API_KEY") is not None, f"Specified to use {args.model} but OPENAI_API_KEY is not set"
+        if args.model in ["gpt-5", "gpt-5-mini"]: assert args.temperature == 1.0, f"gpt-5 and gpt-5-mini only support temperature=1.0 (user input is {args.temperature})"
+    if args.model == "claude-sonnet-4-5": assert os.getenv("ANTHROPIC_API_KEY") is not None, f"Specified to use {args.model} but ANTHROPIC_API_KEY is not set"
+    if args.model == "grok-4": assert os.getenv("XAI_API_KEY") is not None, f"Specified to use {args.model} but XAI_API_KEY is not set"
+    if args.model == "deepseek-reasoner": assert os.getenv("DEEPSEEK_API_KEY") is not None, f"Specified to use {args.model} but DEEPSEEK_API_KEY is not set"
 
 def get_targets(dataset: str) -> List[str]:
     """Get targets from the specified dataset."""
@@ -100,7 +104,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--target_smiles", default=None, type=str, required=False)
     parser.add_argument("--dataset", default=None, type=str, required=False)
-    parser.add_argument("--model", default="gpt-4o", type=str, required=False)
+    parser.add_argument("--model", default="gpt-5", type=str, required=False)
     parser.add_argument("--config_default", default="./src/hparams_default.yaml")
     parser.add_argument("--output_dir", type=str, default="./synplanner_results")
     parser.add_argument("--temperature", type=float, default=0.7)
@@ -115,9 +119,10 @@ def main() -> None:
     start_time = time.perf_counter()
 
     config_default = yaml.safe_load(open(args.config_default))
+    # Set temperature
+    config_default["temperature"] = args.temperature
 
-    # TODO: Could add temperature to output directory name but some models don't support it (e.g., gpt-5-mini only temperature=1)
-    #       This can be easily solved by adding checks to check_args()
+    # TODO: Could add temperature to output directory name
     if args.dataset is not None: 
         args.output_dir = os.path.join(args.output_dir, args.model, args.dataset, str(args.max_oracle_calls))
     else: 
@@ -150,6 +155,7 @@ def main() -> None:
 
     # Run the optimizer
     for seed in args.seed:
+        total_llm_cost = 0
         for target in input_valid_smiles:
             logging.info("=" * 60)
             logging.info(f"Searching synthesis routes for: {target}")
@@ -162,9 +168,11 @@ def main() -> None:
                 config=config_default, 
                 seed=seed
             )
+            total_llm_cost += optimizer.cost
 
     end_time = time.perf_counter()
     logging.info(f"LLM-Syn-Planner ran for {end_time - start_time:.2f} seconds for {len(input_valid_smiles)} target(s)")
+    logging.info(f"Total LLM cost: {total_llm_cost:.2f}")
 
 if __name__ == "__main__":
     main()
