@@ -9,7 +9,7 @@ mutation function if provided in the future.
 from __future__ import annotations
 
 import random
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 import numpy as np
 
 # 20 canonical amino acids
@@ -68,23 +68,39 @@ class ProteinOptimizer:
     # ---------------------------------------------------------------------
     # Public API
     # ---------------------------------------------------------------------
-    def optimize(self, starting_sequences: List[str], num_generations: int = 20) -> Dict[str, Any]:
+    def optimize(
+        self, 
+        starting_sequences: List[str], 
+        num_generations: int = 20,
+        initial_population_with_scores: Optional[List[Tuple[str, float]]] = None,
+        start_generation: int = 0
+    ) -> Dict[str, Any]:
         """Run the GA optimisation loop.
 
         Args:
-            starting_sequences: Initial population.
+            starting_sequences: Initial population (used if initial_population_with_scores is None).
             num_generations: Number of generations to evolve.
+            initial_population_with_scores: Optional pre-evaluated population as [(sequence, score), ...].
+            start_generation: Starting generation number (for display).
         """
         # if starting_sequences != None:
         #     raise ValueError("`starting_sequences` must contain at least one sequence.")
 
-        # Ensure all sequences have the same length
-        seq_len = len(starting_sequences[0])
-        if any(len(s) != seq_len for s in starting_sequences):
-            raise ValueError("All sequences must have the same length.")
-        if hasattr(self.oracle, 'get_initial_population'):
-            starting_sequences = self.oracle.get_initial_population(self.population_size)
-        self._initialize_population(starting_sequences)
+        # Reset state
+        self.generation_count = start_generation
+        
+        # Use pre-evaluated population if provided (for resume)
+        if initial_population_with_scores is not None:
+            self._load_population_from_scores(initial_population_with_scores)
+        else:
+            # Normal initialization
+            # Ensure all sequences have the same length
+            seq_len = len(starting_sequences[0])
+            if any(len(s) != seq_len for s in starting_sequences):
+                raise ValueError("All sequences must have the same length.")
+            if hasattr(self.oracle, 'get_initial_population'):
+                starting_sequences = self.oracle.get_initial_population(self.population_size)
+            self._initialize_population(starting_sequences)
         
 
         best_scores: List[float] = []
@@ -96,7 +112,7 @@ class ProteinOptimizer:
             best_scores.append(self.scores[best_idx])
             best_sequences.append(self.population[best_idx])
             print(
-                f"Generation {gen+1}: Best score = {best_scores[-1]:.4f}, "
+                f"Generation {self.generation_count}: Best score = {best_scores[-1]:.4f}, "
                 f"Oracle calls = {self.oracle.call_count}"
             )
 
@@ -136,6 +152,46 @@ class ProteinOptimizer:
                 self.population.append(mutant)
                 self.scores.append(score)
                 self.all_results[mutant] = score
+    
+    def _load_population_from_scores(self, population_with_scores: List[Tuple[str, float]]):
+        """Load population from pre-evaluated sequences with scores (for resume).
+        
+        Args:
+            population_with_scores: List of (sequence, score) tuples.
+        """
+        self.population = []
+        self.scores = []
+        self.all_results = {}
+        
+        # Load sequences and scores
+        for seq, score in population_with_scores:
+            self.population.append(seq)
+            self.scores.append(score)
+            self.all_results[seq] = score
+        
+        # Ensure we have enough sequences
+        if len(self.population) < self.population_size:
+            # Fill with random mutations if needed
+            while len(self.population) < self.population_size:
+                parent_seq = random.choice(self.population)
+                mutant = self._random_mutate(parent_seq)
+                if mutant not in self.all_results:
+                    score = self.oracle.evaluate_protein(mutant)
+                    self.population.append(mutant)
+                    self.scores.append(score)
+                    self.all_results[mutant] = score
+                else:
+                    # Use cached score
+                    score = self.all_results[mutant]
+                    self.population.append(mutant)
+                    self.scores.append(score)
+        
+        # Trim to population_size if we have more
+        if len(self.population) > self.population_size:
+            # Sort by score and keep top N
+            sorted_indices = np.argsort(self.scores)[::-1][:self.population_size]
+            self.population = [self.population[i] for i in sorted_indices]
+            self.scores = [self.scores[i] for i in sorted_indices]
 
     def _evolve_one_generation(self):
         self.generation_count += 1

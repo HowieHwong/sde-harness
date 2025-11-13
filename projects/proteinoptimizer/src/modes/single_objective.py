@@ -56,20 +56,74 @@ def run_single_objective(args) -> Dict[str, Any]:
     else:
         raise ValueError(f"Unknown oracle: {args.oracle}")
 
-    # Get initial sequences
-    if hasattr(oracle, 'get_initial_population'):
-        initial_sequences = oracle.get_initial_population(args.initial_size)
-    else:
-        # Fallback for ML oracles without a dataset to sample from
-        if args.oracle == 'aav':
-            wt_sequence = "DEEEIRTTNPVATEQYGSVSTNLQRGNR"
-        elif args.oracle == 'gfp':
-            wt_sequence = "SKGEELFTGVVPILVELDGDVNGHKFSVSGEGEGDATYGKLTLKFICTTGKLPVPWPTLVTTLSYGVQCFSRYPDHMKQHDFFKSAMPEGYVQERTIFFKDDGNYKTRAEVKFEGDTLVNRIELKGIDFKEDGNILGHKLEYNYNSHNVYIMADKQKNGIKVNFKIRHNIEDGSVQLADHYQQNTPIGDGPVLLPDNHYLSTQSALSKDPNEKRDHMVLLEFVTAAGITHGMDELYK"
+    # Check if resuming from previous results
+    resume_data = None
+    initial_population_with_scores = None
+    start_generation = 0
+    num_generations = args.generations
+    
+    if hasattr(args, 'resume_results') and args.resume_results:
+        import json
+        resume_file = args.resume_results
+        if not os.path.exists(resume_file):
+            raise FileNotFoundError(f"Resume results file not found: {resume_file}")
+        
+        print(f"Loading resume data from: {resume_file}")
+        with open(resume_file, 'r') as f:
+            resume_data = json.load(f)
+        
+        # Extract final_population as [(sequence, score), ...]
+        if 'final_population' in resume_data:
+            final_pop = resume_data['final_population']
+            if isinstance(final_pop[0], list) and len(final_pop[0]) == 2:
+                # Format: [["sequence", score], ...]
+                initial_population_with_scores = [(item[0], float(item[1])) for item in final_pop]
+            else:
+                raise ValueError("Resume file final_population format not recognized")
         else:
-            raise ValueError(f"Cannot generate initial population for oracle '{args.oracle}'")
-        initial_sequences = [wt_sequence] * args.initial_size
-
-    print(f"Starting with {len(initial_sequences)} initial sequences")
+            raise ValueError("Resume results file missing 'final_population' field")
+        
+        # Determine how many generations to load
+        if hasattr(args, 'continue_generations') and args.continue_generations is not None:
+            num_generations_to_load = args.continue_generations - 1
+            num_generations = args.continue_generations
+        else:
+            num_generations_to_load = None
+        
+        # Load only the specified number of generations from history (for display only)
+        if num_generations_to_load is not None and num_generations_to_load > 0:
+            best_scores_history = resume_data.get('best_scores_history', [])
+            if len(best_scores_history) > num_generations_to_load:
+                print(f"Loading only first {num_generations_to_load} generations from resume file (file has {len(best_scores_history)} generations)")
+                start_generation = num_generations_to_load
+            else:
+                print(f"Resume file has {len(best_scores_history)} generations, using all")
+                start_generation = len(best_scores_history)
+        else:
+            best_scores_history = resume_data.get('best_scores_history', [])
+            start_generation = len(best_scores_history)
+        
+        # Display best score from resume (for info only)
+        if 'best_score' in resume_data:
+            print(f"Previous best score: {resume_data['best_score']:.4f} (for display only)")
+        
+        print(f"Resuming from generation {start_generation}")
+        print(f"Loaded {len(initial_population_with_scores)} sequences from final population")
+        print(f"Will continue for {num_generations} more generations")
+    else:
+        # Get initial sequences normally
+        if hasattr(oracle, 'get_initial_population'):
+            initial_sequences = oracle.get_initial_population(args.initial_size)
+        else:
+            # Fallback for ML oracles without a dataset to sample from
+            if args.oracle == 'aav':
+                wt_sequence = "DEEEIRTTNPVATEQYGSVSTNLQRGNR"
+            elif args.oracle == 'gfp':
+                wt_sequence = "SKGEELFTGVVPILVELDGDVNGHKFSVSGEGEGDATYGKLTLKFICTTGKLPVPWPTLVTTLSYGVQCFSRYPDHMKQHDFFKSAMPEGYVQERTIFFKDDGNYKTRAEVKFEGDTLVNRIELKGIDFKEDGNILGHKLEYNYNSHNVYIMADKQKNGIKVNFKIRHNIEDGSVQLADHYQQNTPIGDGPVLLPDNHYLSTQSALSKDPNEKRDHMVLLEFVTAAGITHGMDELYK"
+            else:
+                raise ValueError(f"Cannot generate initial population for oracle '{args.oracle}'")
+            initial_sequences = [wt_sequence] * args.initial_size
+        print(f"Starting with {len(initial_sequences)} initial sequences")
 
     # Create optimizer
     optimizer = ProteinOptimizer(
@@ -83,10 +137,18 @@ def run_single_objective(args) -> Dict[str, Any]:
     )
     
     # Run optimization
-    results = optimizer.optimize(
-        starting_sequences=initial_sequences,
-        num_generations=args.generations,
-    )
+    if resume_data and initial_population_with_scores is not None:
+        results = optimizer.optimize(
+            starting_sequences=[],  # Not used when initial_population_with_scores is provided
+            num_generations=num_generations,
+            initial_population_with_scores=initial_population_with_scores,
+            start_generation=start_generation,
+        )
+    else:
+        results = optimizer.optimize(
+            starting_sequences=initial_sequences,
+            num_generations=num_generations,
+        )
     
     # Print summary
     print("\nOptimization Results:")
