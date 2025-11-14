@@ -32,6 +32,7 @@ MODEL_ALIASES = {
     "claude-sonnet-4-5": "claude-sonnet-4-5",
     "gpt-5": "gpt-5",
     "grok-4": "grok-4",
+    "gpt-5-chat-latest": "gpt-5-chat-latest",
 }
 
 TASK_ALIASES = {
@@ -241,12 +242,14 @@ def main():
             return "GPT-5"
         if m == "grok-4":
             return "Grok-4"
+        if m == "gpt-5-chat-latest":
+            return "GPT-5-chat-latest"
         return "Other"
 
     df["family"] = df["model"].apply(_family)
 
     # Keep only Baseline and GPT rows
-    df = df[df["family"].isin(["Baseline", "GPT5-mini", "DeepSeek", "Claude-Sonnet-4-5", "GPT-5", "Grok-4"])].copy()
+    df = df[df["family"].isin(["Baseline", "GPT5-mini", "DeepSeek", "Claude-Sonnet-4-5", "GPT-5", "GPT-5-chat-latest"])].copy()
     if df.empty:
         print("No Baseline/GPT records found in parsed files.")
         return
@@ -267,14 +270,14 @@ def main():
     )
 
     # Order rows: Baseline first, then GPT
-    order = pd.CategoricalDtype(categories=["Baseline", "GPT5-mini", "DeepSeek", "Claude-Sonnet-4-5", "GPT-5", "Grok-4"], ordered=True)
+    order = pd.CategoricalDtype(categories=["Baseline", "GPT5-mini", "DeepSeek", "Claude-Sonnet-4-5", "GPT-5", "GPT-5-chat-latest"], ordered=True)
     agg["family"] = agg["family"].astype(order)
     agg = agg.sort_values("family")
 
     # Round for display
-    display = agg[["family", "Top_1", "Top_10"]].copy()
+    display = agg[["family", "Top_10"]].copy()
     display = display.rename(columns={"family": "Model"})
-    display = display.round({"Top_1": 4,  "Top_10": 4})
+    display = display.round({"Top_10": 4})
 
     # Print exactly one table
     try:

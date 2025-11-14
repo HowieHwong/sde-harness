@@ -1,4 +1,4 @@
-models=("deepseek/deepseek-reasoner")
+models=("openai/gpt-5-chat-latest")
 datasets=("syn-3bfo" "gb1" "trpb" "aav" "gfp")
 tasks=("single")
 
