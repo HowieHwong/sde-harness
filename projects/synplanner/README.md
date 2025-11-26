@@ -84,8 +84,8 @@ Benchmark on Pre-defined Target Sets
 sh run_benchmark.sh
 ```
 This script runs a sweep of the following:
-   - **model** = ("gpt-4o" "gpt-5" "gpt-5-mini" "claude-sonnet-4-5" "grok-4" "deepseek-reasoner")
-   - **datase**t = {"uspto-190", "pistachio-hard"}
+   - **model** = ("gpt-4o", "gpt-5" "gpt-5-chat-latest", "claude-sonnet-4-5" "deepseek-reasoner")
+   - **datase**t = {""pistachio-hard"}
    - **max_oracle_calls** = {100}
 
 *Modify the script to run more/less configurations.*

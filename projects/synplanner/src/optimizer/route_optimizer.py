@@ -1,10 +1,10 @@
 from __future__ import print_function
 from typing import List, Tuple, Dict, Any
 import re 
-import copy
 import logging
 import ast
 import random
+from copy import deepcopy
 import math
 import numpy as np
 
@@ -78,8 +78,10 @@ def node_value(
             if visited_cache[molecule] > 25:
                 population_score = -10
 
-    if total_visits == 0: final_score = - population_score
-    else: final_score = - population_score - C * math.sqrt(math.log(total_visits) / node_visits)
+    if total_visits == 0: 
+        final_score = - population_score
+    else: 
+        final_score = - population_score - C * math.sqrt(math.log(total_visits) / node_visits)
 
     return final_score
 
@@ -110,10 +112,10 @@ class RouteOptimizer(BaseOptimizer):
             try:
                 sampled_index = np.random.choice(len(route_list), p=population_probs, size=3, replace=False)
                 sampled_routes = [route_list[i] for i in sampled_index]
-                example_routes = "\n".join(
-                    f"<ROUTE>\n{str(process_reaction_routes(route))}\n</ROUTE>\n"
-                    for route in sampled_routes
-                )
+                example_routes = ""
+                for i in sampled_routes:
+                    example_routes = example_routes + "<ROUTE>\n"+ str(process_reaction_routes(i)) + "\n</ROUTE>\n"
+                example_routes = example_routes + "\n"
 
                 # Create the INITIALIZATION prompt (First step of route design)
                 initialization_prompt = construct_initialization_prompt(
@@ -127,8 +129,13 @@ class RouteOptimizer(BaseOptimizer):
                     model=self.args.model,
                     temperature=temperature,
                 )
-                self.oracle.llm_calls += 1
-                self.cost += cost
+                with self.oracle.llm_calls_lock:
+                    self.oracle.llm_calls += 1
+                with self.oracle.cost_lock:
+                    self.oracle.cost += cost
+                # Log LLM oracle budget at every 25% of budget exhausted
+                if self.oracle.llm_calls % (self.args.max_oracle_calls // 4) == 0:
+                    logging.info(f"LLM oracle budget: {self.oracle.llm_calls}/{self.args.max_oracle_calls} used")
                 
                 # Check if budget is exhausted
                 if self.finish:
@@ -137,7 +144,8 @@ class RouteOptimizer(BaseOptimizer):
 
                 # Extract the route from the LLM response
                 match = re.search(r"<ROUTE>(.*?)<ROUTE>", answer, re.DOTALL)
-                if match == None: match = re.search(r"<ROUTE>(.*?)</ROUTE>", answer, re.DOTALL)
+                if match == None: 
+                    match = re.search(r"<ROUTE>(.*?)</ROUTE>", answer, re.DOTALL)
 
                 route_content = match.group(1)
 
@@ -165,7 +173,6 @@ class RouteOptimizer(BaseOptimizer):
 
                 # After parsing the LLM output, sanitize the route
                 route_class_item = Route(target_smi)
-                logging.info(f"INITIALIZATION phase: Sanitizing (running checks) the LLM generated route...")
                 checked_route, final_evaluation = self.sanitize(
                     starting_list=[target_smi],
                     route=route,
@@ -174,8 +181,11 @@ class RouteOptimizer(BaseOptimizer):
 
                 if final_evaluation[0][2]["reaction_existence"] == False and final_evaluation[0][2]["product_inside"] == True:
                     self.dead_molecules.append(final_evaluation[0][2]["product"][0])
+                    logging.info("Final route evaluation error, generating a new route...")
                     continue
-                if final_evaluation[0][1] == False: continue
+                if final_evaluation[0][1] == False: 
+                    logging.info("Final route evaluation error, generating a new route...")
+                    continue
 
                 # Calculate the reward score for the route
                 score = self.rewards(final_evaluation)
@@ -213,8 +223,9 @@ class RouteOptimizer(BaseOptimizer):
                     count = 0
                     parent_a = random.choice(combined_list)
                     sampled_route = parent_a[1]
+
                 route = sampled_route.validated_route
-                new_route_item = copy.deepcopy(sampled_route)
+                new_route_item = deepcopy(sampled_route)
                 evaluation = new_route_item.evaluation
                 smi_list = route[-1]["Updated molecule set"]
                 # Find which molecules are not available for purchase
@@ -238,13 +249,18 @@ class RouteOptimizer(BaseOptimizer):
                     reaction_cache=self.oracle.reaction_cache
                 )
                 # Query the LLM to generate a modified route
-                _, new_a, cost = query_LLM(
+                _, answer, cost = query_LLM(
                     query=mutation_prompt,
                     model=self.args.model,
                     temperature=temperature
                 )
-                self.oracle.llm_calls += 1  
-                self.cost += cost
+                with self.oracle.llm_calls_lock:
+                    self.oracle.llm_calls += 1
+                with self.oracle.cost_lock:
+                    self.oracle.cost += cost
+                # Log LLM oracle budget at every 25% of budget exhausted
+                if self.oracle.llm_calls % (self.args.max_oracle_calls // 4) == 0:
+                    logging.info(f"LLM oracle budget: {self.oracle.llm_calls}/{self.args.max_oracle_calls} used")
                 
                 # Check if budget is exhausted
                 if self.finish:
@@ -252,26 +268,28 @@ class RouteOptimizer(BaseOptimizer):
                     return None
 
                 # Extract the modified route from LLM response
-                match = re.search(r"<ROUTE>(.*?)<ROUTE>", new_a, re.DOTALL)
-                if match == None: match = re.search(r'<ROUTE>(.*?)</ROUTE>', new_a, re.DOTALL)
+                match = re.search(r"<ROUTE>(.*?)<ROUTE>", answer, re.DOTALL)
+                if match == None: 
+                    match = re.search(r'<ROUTE>(.*?)</ROUTE>', answer, re.DOTALL)
 
                 route_content = match.group(1)
 
                 new_route = ast.literal_eval(route_content)
 
-                # Clean up the route by removing redundant last steps
-                comp1 = ast.literal_eval(new_route[-1]["Updated molecule set"])
-                comp2 = ast.literal_eval(new_route[-2]["Updated molecule set"])
-                last_step_reactants = new_route[-1]["Reactants"]
+                # Clean up the route by removing redundant last steps, but only if the route has 2+ steps
+                if len(new_route) >= 2:
+                    comp1 = ast.literal_eval(new_route[-1]["Updated molecule set"])
+                    comp2 = ast.literal_eval(new_route[-2]["Updated molecule set"])
+                    last_step_reactants = new_route[-1]["Reactants"]
 
-                if (
-                    set(comp1) == set(comp2) or 
-                    last_step_reactants == "" or 
-                    last_step_reactants == "[]" or 
-                    last_step_reactants == "None" or 
-                    last_step_reactants == "[None]"
-                ):
-                    new_route = new_route[:-1]
+                    if (
+                        set(comp1) == set(comp2) or 
+                        last_step_reactants == "" or 
+                        last_step_reactants == "[]" or 
+                        last_step_reactants == "None" or 
+                        last_step_reactants == "[None]"
+                    ):
+                        new_route = new_route[:-1]
 
                 # Validate the route format and extract key components
                 for idx, step in enumerate(new_route):
@@ -287,19 +305,19 @@ class RouteOptimizer(BaseOptimizer):
                             self.update_cache(product, reaction)
 
                 # Sanitize the modified route to ensure chemical validity
-                logging.info(f"MUTATION phase: Sanitizing (running checks) the LLM generated route...")
                 checked_route, final_evaluation = self.sanitize(
                     starting_list=smi_list,
                     route=new_route,
                     exploration_signal=False  # During MUTATION, explore less reactions
                 )
                 # Update visited molecules cache
-                if final_evaluation[0][2]["product_inside"] == True:
+                if final_evaluation[0][2]["product_inside"]:
                     self.update_visited_molecules(final_evaluation[0][2]["product"])
 
                 # Check if the reaction exists in the database
-                if final_evaluation[0][2]["reaction_existence"] == False: 
-                    if final_evaluation[0][2]["product_inside"] == True: self.update_dead_molecules(final_evaluation[0][2]["product"][0])
+                if not final_evaluation[0][2]["reaction_existence"]: 
+                    if final_evaluation[0][2]["product_inside"]: 
+                        self.update_dead_molecules(final_evaluation[0][2]["product"][0])
                     continue
                 # Update the route with validated information
                 new_route_item.update_route(checked_route, final_evaluation)
@@ -345,25 +363,23 @@ class RouteOptimizer(BaseOptimizer):
 
         with ThreadPoolExecutor() as executor:
             futures = [executor.submit(self.initialization, target, rag_tuples, float(config["temperature"])) for _ in range(config["population_size"])]
-            results = [future.result() for future in futures]
-            starting_population = [r for r in results if r is not None]
+            starting_population = [future.result() for future in futures]
 
-        # Check if budget was exhausted during initialization
-        if len(starting_population) == 0 or self.finish:
-            logging.info(f"LLM budget exhausted during initialization. Terminating early.")
+        # Check if budget exhausted during initialization
+        if self.finish:
+            logging.info(f"Finished during INITIALIZATION after using {self.oracle.llm_calls} LLM calls. Route not found, ending...")              
             return
 
         # Initial population
         population_routes = starting_population
         population_scores = [route_class_item.get_reward() for route_class_item in population_routes]
         combined_list = list(zip(population_scores, population_routes))
-        all_routes = copy.deepcopy(population_routes)
+        all_routes = deepcopy(population_routes)
 
         # ----------------------------------------------------
         # MUTATION
         # ----------------------------------------------------
         logging.info("--- MUTATION ---")
-        logging.info("Modifying routes to find a solved synthetic route...")
         while True:
             if len(self.oracle) > 5:
                 self.sort_buffer()
@@ -395,11 +411,12 @@ class RouteOptimizer(BaseOptimizer):
                 offspring_routes = []
                 for i in range(len(returned_routes)):
                     if returned_routes[i] is not None:
-                        if check_distinct_route(offspring_routes, returned_routes[i]): offspring_routes.append(returned_routes[i])
+                        if check_distinct_route(offspring_routes, returned_routes[i]): 
+                            offspring_routes.append(returned_routes[i])
 
             # Check if budget exhausted during mutation
             if self.finish:
-                logging.info(f"Finished in {self.oracle.llm_calls} LLM calls. Route not found, ending...")              
+                logging.info(f"Finished during MUTATION after using {self.oracle.llm_calls} LLM calls. Route not found, ending...")              
                 break
 
             # Add new population
@@ -418,8 +435,8 @@ class RouteOptimizer(BaseOptimizer):
 
             combined_list = list(zip(all_scores, all_routes))
             combined_list = sorted(combined_list, key=lambda x: x[0], reverse=True)[:config["population_size"]]
-            population_routes = [t[1] for t in combined_list]
             population_scores = [t[0] for t in combined_list]
+            population_routes = [t[1] for t in combined_list]
 
             # Stop criterion
             if len(self.oracle) > 5:
@@ -437,5 +454,5 @@ class RouteOptimizer(BaseOptimizer):
                     break
   
             if self.finish:   
-                logging.info(f"Finished in {self.oracle.llm_calls} LLM calls. Route not found, ending...")              
+                logging.info(f"Finished in {self.oracle.llm_calls} LLM calls...")              
                 break

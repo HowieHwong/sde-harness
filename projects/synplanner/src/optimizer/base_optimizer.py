@@ -89,7 +89,7 @@ class BaseOptimizer:
             data["prod_fp"] = all_fps
             pickle.dump(all_fps, open(RULE_BASED_FPS_FILE, "wb"))
 
-        return data.loc[data["dataset"] == "val"]
+        return data.loc[data["dataset"] == "train"]
 
     def update_visited_molecules(
         self, 
@@ -144,10 +144,7 @@ class BaseOptimizer:
         exploration_signal: bool
     ) -> Tuple[bool, str, str]:
         """Search for similar reactions using fingerprint similarity and test them on the given product."""
-        if exploration_signal == True:
-            reaction_number = 1000
-        else:
-            reaction_number = 100
+        reaction_number = 1000 if exploration_signal else 100
 
         try:
             # Remove invalid molecules in the reaction to perform similarity search
@@ -208,7 +205,7 @@ class BaseOptimizer:
             route=new_route, 
             exploration_signal=exploration_signal
         )
-        # Update the route based on the LLM-proposed reactions (E.g., with exact match templates from the reference database)
+        # Update the route based on the LLM-proposed reactions (e.g., with exact match templates from the reference database)
         new_route = map_reaction(
             routes=new_route, 
             stepwise_results=first_evaluation
@@ -355,7 +352,8 @@ class BaseOptimizer:
                     product=product,
                     reactants=reactants,
                     inventory=self.inventory,
-                    oracle=self.oracle)
+                    oracle=self.oracle
+                )
             
             # If the first reaction step did not yield an exact match template, then run a "blurry search"
             # which takes the LLM-proposed reaction and runs a similarity search on the reaction templates database
@@ -371,15 +369,18 @@ class BaseOptimizer:
                 elif reaction_existence and not reaction_valid: 
                     reaction_existence, reaction_key, new_reaction = self.blurry_search(reaction, product[0], exploration_signal)  
             
-                if reaction_key == None: new_reaction = reaction
-                else: reaction_valid, updated_set_valid = verify_reaction_step(
-                    molecule_set=molecule_set,
-                    updated_molecule_set=updated_molecule_set,
-                    reaction=new_reaction,
-                    product=product,
-                    reactants=reactants,
-                    inventory=self.inventory,
-                    oracle=self.oracle)
+                if reaction_key == None: 
+                    new_reaction = reaction
+                else: 
+                    reaction_valid, updated_set_valid = verify_reaction_step(
+                        molecule_set=molecule_set,
+                        updated_molecule_set=updated_molecule_set,
+                        reaction=new_reaction,
+                        product=product,
+                        reactants=reactants,
+                        inventory=self.inventory,
+                        oracle=self.oracle
+                    )
                
             if (
                 len(invalid_molset_mol_id) == 0 and
@@ -479,8 +480,7 @@ class BaseOptimizer:
 
             if reaction_existence == True:
                 reaction_valid, updated_set_valid = verify_reaction_step(molecule_set, updated_molecule_set, new_reaction, product, reactants, self.inventory, self.oracle)
-    
-    
+            
             if (
                 len(invalid_molset_mol_id) == 0 and
                 len(invalid_updated_mol_id) == 0 and

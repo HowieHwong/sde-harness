@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # NOTE: Can expand the arguments to run a larger sweep
-models=("gpt-4o" "gpt-5" "gpt-5-mini" "claude-sonnet-4-5" "grok-4" "deepseek-reasoner")
-datasets=("uspto-190" "pistachio-hard")
+models=("gpt-4o", "gpt-5", "gpt-5-chat-latest", "claude-sonnet-4-5", "deepseek-reasoner")
+datasets=("pistachio-hard")
 max_oracle_calls=(100)
 
 echo "Starting benchmark runs..."

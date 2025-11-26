@@ -13,7 +13,7 @@ import pickle
 from rdkit import Chem
 
 from src.optimizer.route_optimizer import RouteOptimizer
-from src.utils.utils import setup_logging
+from src.utils.utils import setup_logging, set_seed
 from src.utils.chemistry_utils import MORGAN_FP_GENERATOR
 
 
@@ -73,10 +73,10 @@ def check_args(args: argparse.Namespace) -> None:
         valid_datasets = ["uspto-easy", "uspto-190", "pistachio-reachable", "pistachio-hard"]
         assert args.dataset in valid_datasets, f"dataset must be one of {valid_datasets}, got {args.dataset}"
         
-    assert args.model in ["gpt-4o", "gpt-5", "gpt-5-mini", "claude-sonnet-4-5", "grok-4", "deepseek-reasoner"], f"model must be one of ['gpt-4o', 'gpt-5', 'gpt-5-mini', 'claude-sonnet-4-5', 'grok-4', 'deepseek-reasoner'], got {args.model}"
-    if args.model in ["gpt-4o", "gpt-5", "gpt-5-mini"]: 
+    assert args.model in ["gpt-4o", "gpt-5-mini", "gpt-5", "gpt-5-chat-latest", "claude-sonnet-4-5", "grok-4", "deepseek-reasoner"], f"model must be one of ['gpt-4o', 'gpt-5-mini', 'gpt-5', 'gpt-5-chat-latest', 'claude-sonnet-4-5', 'grok-4', 'deepseek-reasoner'], got {args.model}"
+    if args.model in ["gpt-4o", "gpt-5-mini", "gpt-5", "gpt-5-chat-latest"]: 
         assert os.getenv("OPENAI_API_KEY") is not None, f"Specified to use {args.model} but OPENAI_API_KEY is not set"
-        if args.model in ["gpt-5", "gpt-5-mini"]: assert args.temperature == 1.0, f"gpt-5 and gpt-5-mini only support temperature=1.0 (user input is {args.temperature})"
+        if args.model in ["gpt-5-mini", "gpt-5", "gpt-5-chat-latest"]: assert args.temperature == 1.0, f"gpt-5-mini, gpt-5, and gpt-5-chat-latest only support temperature=1.0 (user input is {args.temperature})"
     if args.model == "claude-sonnet-4-5": assert os.getenv("ANTHROPIC_API_KEY") is not None, f"Specified to use {args.model} but ANTHROPIC_API_KEY is not set"
     if args.model == "grok-4": assert os.getenv("XAI_API_KEY") is not None, f"Specified to use {args.model} but XAI_API_KEY is not set"
     if args.model == "deepseek-reasoner": assert os.getenv("DEEPSEEK_API_KEY") is not None, f"Specified to use {args.model} but DEEPSEEK_API_KEY is not set"
@@ -132,7 +132,7 @@ def main() -> None:
     setup_logging(os.path.join(args.output_dir, "log.log"))
     logging.info("=" * 60)
     logging.info("🧪 LLM-Syn-Planner - Starting synthesis route planning")
-    logging.info("=" * 60)    
+    logging.info("=" * 60)
     logging.info(format_dict_for_logging(vars(args), "📋 Arguments"))
     logging.info(format_dict_for_logging(config_default, "⚙️  Hyperparameters"))
     logging.info("=" * 60)
@@ -155,20 +155,25 @@ def main() -> None:
 
     # Run the optimizer
     for seed in args.seed:
+        set_seed(seed)
         total_llm_cost = 0
         for target in input_valid_smiles:
-            logging.info("=" * 60)
-            logging.info(f"Searching synthesis routes for: {target}")
-            logging.info("=" * 60)
-            optimizer = RouteOptimizer(args)  # Re-initialization for clean state
-            optimizer.optimize(
-                target=target, 
-                route_list=reference_route_list, 
-                all_fps=all_fps, 
-                config=config_default, 
-                seed=seed
-            )
-            total_llm_cost += optimizer.cost
+            try:
+                logging.info("=" * 60)
+                logging.info(f"Searching synthesis routes for: {target}")
+                logging.info("=" * 60)
+                optimizer = RouteOptimizer(args)  # Re-initialization for clean state
+                optimizer.optimize(
+                    target=target, 
+                    route_list=reference_route_list, 
+                    all_fps=all_fps, 
+                    config=config_default, 
+                    seed=seed
+                )
+                total_llm_cost += optimizer.oracle.cost
+            except Exception as e:
+                logging.error(f"Error during synthesis route search for {target}: {e}")
+                continue
 
     end_time = time.perf_counter()
     logging.info(f"LLM-Syn-Planner ran for {end_time - start_time:.2f} seconds for {len(input_valid_smiles)} target(s)")

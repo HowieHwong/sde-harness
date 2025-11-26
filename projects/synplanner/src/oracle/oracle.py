@@ -2,6 +2,7 @@ from typing import Dict, List, Tuple, Any, Optional
 import os
 import json
 import yaml
+import threading
 
 from rdkit import Chem
 
@@ -32,6 +33,9 @@ class Oracle:
         self.route_buffer = {} if route_buffer is None else route_buffer
         self.reaction_cache = dict() # mol_smiles: [reaction]
         self.llm_calls = 0  # Track LLM calls
+        self.llm_calls_lock = threading.Lock()  # Thread-safe lock for llm_calls counter
+        self.cost = 0
+        self.cost_lock = threading.Lock()  # Thread-safe lock for cost counter
 
         self.last_log = 0
         self.sc_Oracle = SCScorer()
