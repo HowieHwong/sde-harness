@@ -114,6 +114,7 @@ def run_single_objective(args) -> Dict[str, Any]:
         # Get initial sequences normally
         if hasattr(oracle, 'get_initial_population'):
             initial_sequences = oracle.get_initial_population(args.initial_size)
+            initial_sequences[-1] = oracle.wildtype_sequence
         else:
             # Fallback for ML oracles without a dataset to sample from
             if args.oracle == 'aav':

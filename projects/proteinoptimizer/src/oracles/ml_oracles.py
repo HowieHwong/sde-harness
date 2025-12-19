@@ -50,17 +50,20 @@ class AAVOracle(ProteinOracle):
         base_dir = os.path.dirname(os.path.abspath(__file__))
         oracle_dir = os.path.join(base_dir, "../utils/ckpt/AAV/mutations_0/percentile_0.0_1.0")
         gt = pd.read_csv(os.path.join(base_dir, "../../data/AAV/ground_truth.csv"))
+        self.gt = gt
         self.score_max = gt['score'].max()
         self.score_min = gt['score'].min()
         self.oracle = get_model(predictor_dir=None, oracle_dir=oracle_dir)
         self.tokenizer = Encoder()
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self._potts_landscape = None
+        self.wildtype_sequence = "DEEEIRTTNPVATEQYGSVSTNLQRGNR"
     def _evaluate_protein_impl(self, sequence: str) -> float:
         """Predict fitness using the loaded ML model."""
         tokenized = self.tokenizer.encode([sequence]).to(self.device)
         return min_max_normalize(self.score_min, self.score_max, self.oracle(tokenized).item())
-
+    def get_initial_population(self, size: int) -> List[str]:
+        return np.random.choice(self.gt["sequence"].tolist()[:int(0.6*len(self.gt["sequence"]))], size)
 class GFPOracle(ProteinOracle):
     """ML-based oracle for GFP fitness prediction."""
     
@@ -71,13 +74,18 @@ class GFPOracle(ProteinOracle):
         predictor_dir = os.path.join(base_dir, "../utils/ckpt/GFP/mutations_7/percentile_0.0_0.3/unsmoothed_smoothed/01_03_2025_23_56")
         oracle_dir = os.path.join(base_dir, "../utils/ckpt/GFP/mutations_0/percentile_0.0_1.0")
         gt = pd.read_csv(os.path.join(base_dir, "../../data/GFP/ground_truth.csv"))
+        self.gt = gt
         self.score_max = gt['score'].max()
         self.score_min = gt['score'].min()
         self.oracle = get_model(predictor_dir=predictor_dir, oracle_dir=oracle_dir)
         self.tokenizer = Encoder()
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self._potts_landscape = None
+        self.wildtype_sequence = "SKGEELFTGVVPILVELDGDVNGHKFSVSGEGEGDATYGKLTLKFICTTGKLPVPWPTLVTTLSYGVQCFSRYPDHMKQHDFFKSAMPEGYVQERTIFFKDDGNYKTRAEVKFEGDTLVNRIELKGIDFKEDGNILGHKLEYNYNSHNVYIMADKQKNGIKVNFKIRHNIEDGSVQLADHYQQNTPIGDGPVLLPDNHYLSTQSALSKDPNEKRDHMVLLEFVTAAGITHGMDELYK"
     def _evaluate_protein_impl(self, sequence: str) -> float:
         """Predict fitness using the loaded ML model."""
         tokenized = self.tokenizer.encode([sequence]).to(self.device)
         return min_max_normalize(self.score_min, self.score_max, self.oracle(tokenized).item())
+
+    def get_initial_population(self, size: int) -> List[str]:
+        return np.random.choice(self.gt["sequence"].tolist()[:int(0.6*len(self.gt["sequence"]))], size)
