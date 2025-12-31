@@ -86,8 +86,9 @@ class BaseOptimizer:
         else:
             logging.info(f"Computing Morgan fingerprints of rule-based set... will be stored in ./dataset/rule_based_fps.pkl")
             all_fps = [MORGAN_FP_GENERATOR(smi) for smi in data["prod_smiles"]]
-            data["prod_fp"] = all_fps
             pickle.dump(all_fps, open(RULE_BASED_FPS_FILE, "wb"))
+
+        data["prod_fp"] = all_fps
 
         return data.loc[data["dataset"] == "train"]
 

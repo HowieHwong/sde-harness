@@ -32,7 +32,7 @@ Installation
    ```bash
    export OPENAI_API_KEY="your-api-key-here"
    export ANTHROPIC_API_KEY="your-api-key-here"
-   export XAI_API_KEY="your-api-key-here"
+   export DEEPSEEK_API_KEY="your-api-key-here"
    ```
 
 3. Download required data (copied the link from the original repository), unzip, and add it to the repository:
@@ -55,7 +55,7 @@ Command Line Interface Usage
 
 **NOTE 2:** On first run, computed fingerprints will be saved in `./dataset`. Subsequent runs will load them.
 
-**NOTE 3:** The `--max_oracle_calls` parameter controls the maximum number of LLM calls before termination. This directly impacts API costs and runtime. Default values used in benchmarks are 100, 300, and 500.
+**NOTE 3:** The `--max_oracle_calls` parameter controls the maximum number of LLM calls before termination. This directly impacts API costs and runtime. The default value used in the benchmark is 100.
 
 ```bash
 # Single target molecule (aripiprazole)
@@ -66,7 +66,7 @@ python cli.py --target_smiles "C1CC(=O)NC2=C1C=CC(=C2)OCCCCN3CCN(CC3)C4=C(C(=CC=
 # The code will parse through the SMILES and sequentally run search on each
 python cli.py --target_smiles test_smiles.smi
 
-# LLM temperature impacts performance. Default is 0.7 and this parameter is exposed to the user
+# LLM temperature impacts performance. Default is 0.7 (if model allows) and this parameter is exposed to the user
 python cli.py --target_smiles test_smiles.smi --temperature 0.5
 
 # Control the maximum number of LLM calls (affects cost and runtime)
@@ -74,7 +74,7 @@ python cli.py --target_smiles test_smiles.smi --max_oracle_calls 300
 
 # Running on pre-defined targets 
 # Choose from {"uspto-easy", "uspto-190", "pistachio-reachable", "pistachio-hard"}
-python cli.py --dataset uspto-easy
+python cli.py --dataset pistachio-hard
 ```
 
 Benchmark on Pre-defined Target Sets
@@ -94,7 +94,14 @@ This script runs a sweep of the following:
 ```bash
 python create_benchmark_table.py
 ```
-# TODO: show example table
+**NOTE:** `./synplanner_results.tar.gz` contains a compressed copy (for space reasons) of the results from a single run of all the models below (these values are in the publication).
+| Algorithm | Pistachio-Hard |
+|-----------|----------------|
+| LLM-Syn-Planner(gpt-4o) | 60.0 |
+| LLM-Syn-Planner(gpt-5-chat-latest) | 49.0 |
+| LLM-Syn-Planner(gpt-5) | 53.0 |
+| LLM-Syn-Planner(claude-sonnet-4-5) | 53.0 |
+| LLM-Syn-Planner(deepseek-reasoner) | 42.0 |
 
 
 References

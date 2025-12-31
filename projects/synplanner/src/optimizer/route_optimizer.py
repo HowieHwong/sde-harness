@@ -110,6 +110,11 @@ class RouteOptimizer(BaseOptimizer):
 
         while True:
             try:
+                # Check if budget is exhausted
+                if self.finish:
+                    logging.info(f"LLM budget exhausted during initialization ({self.oracle.llm_calls} calls)")
+                    return None
+
                 sampled_index = np.random.choice(len(route_list), p=population_probs, size=3, replace=False)
                 sampled_routes = [route_list[i] for i in sampled_index]
                 example_routes = ""
@@ -129,18 +134,11 @@ class RouteOptimizer(BaseOptimizer):
                     model=self.args.model,
                     temperature=temperature,
                 )
-                with self.oracle.llm_calls_lock:
-                    self.oracle.llm_calls += 1
-                with self.oracle.cost_lock:
-                    self.oracle.cost += cost
-                # Log LLM oracle budget at every 25% of budget exhausted
-                if self.oracle.llm_calls % (self.args.max_oracle_calls // 4) == 0:
+                with self.oracle.llm_calls_lock: self.oracle.llm_calls += 1
+                with self.oracle.cost_lock: self.oracle.cost += cost
+                # Log LLM oracle budget at every 20% of budget exhausted
+                if self.oracle.llm_calls % (self.args.max_oracle_calls // 5) == 0:
                     logging.info(f"LLM oracle budget: {self.oracle.llm_calls}/{self.args.max_oracle_calls} used")
-                
-                # Check if budget is exhausted
-                if self.finish:
-                    logging.info(f"LLM budget exhausted during initialization ({self.oracle.llm_calls} calls)")
-                    return None
 
                 # Extract the route from the LLM response
                 match = re.search(r"<ROUTE>(.*?)<ROUTE>", answer, re.DOTALL)
@@ -150,18 +148,21 @@ class RouteOptimizer(BaseOptimizer):
                 route_content = match.group(1)
 
                 route = ast.literal_eval(route_content)
-                comp1 = ast.literal_eval(route[-1]["Updated molecule set"])
-                comp2 = ast.literal_eval(route[-2]["Updated molecule set"])
-                last_step_reactants = route[-1]["Reactants"]
 
-                if (
-                    set(comp1) == set(comp2) or 
-                    last_step_reactants == "" or 
-                    last_step_reactants == "[]" or 
-                    last_step_reactants == "None" or 
-                    last_step_reactants == "[None]"
-                ):
-                    route = route[:-1]
+                # Clean up the route by removing redundant last steps, but only if the route has 2+ steps
+                if len(route) >= 2:
+                    comp1 = ast.literal_eval(route[-1]["Updated molecule set"])
+                    comp2 = ast.literal_eval(route[-2]["Updated molecule set"])
+                    last_step_reactants = route[-1]["Reactants"]
+
+                    if (
+                        set(comp1) == set(comp2) or 
+                        last_step_reactants == "" or 
+                        last_step_reactants == "[]" or 
+                        last_step_reactants == "None" or 
+                        last_step_reactants == "[None]"
+                    ):
+                        route = route[:-1]
 
                 for step in route:
                     temp = ast.literal_eval(step["Molecule set"])
@@ -217,6 +218,11 @@ class RouteOptimizer(BaseOptimizer):
         final_route_item = None
         for _ in range(5):
             try:
+                # Check if budget is exhausted
+                if self.finish:
+                    logging.info(f"LLM budget exhausted during mutation ({self.oracle.llm_calls} calls)")
+                    return None
+
                 count = count + 1
                 # If we've failed 5 times, select a new parent route
                 if count >= 5:
@@ -254,18 +260,11 @@ class RouteOptimizer(BaseOptimizer):
                     model=self.args.model,
                     temperature=temperature
                 )
-                with self.oracle.llm_calls_lock:
-                    self.oracle.llm_calls += 1
-                with self.oracle.cost_lock:
-                    self.oracle.cost += cost
-                # Log LLM oracle budget at every 25% of budget exhausted
-                if self.oracle.llm_calls % (self.args.max_oracle_calls // 4) == 0:
+                with self.oracle.llm_calls_lock: self.oracle.llm_calls += 1
+                with self.oracle.cost_lock: self.oracle.cost += cost
+                # Log LLM oracle budget at every 20% of budget exhausted
+                if self.oracle.llm_calls % (self.args.max_oracle_calls // 5) == 0:
                     logging.info(f"LLM oracle budget: {self.oracle.llm_calls}/{self.args.max_oracle_calls} used")
-                
-                # Check if budget is exhausted
-                if self.finish:
-                    logging.info(f"LLM budget exhausted during mutation ({self.oracle.llm_calls} calls)")
-                    return None
 
                 # Extract the modified route from LLM response
                 match = re.search(r"<ROUTE>(.*?)<ROUTE>", answer, re.DOTALL)
