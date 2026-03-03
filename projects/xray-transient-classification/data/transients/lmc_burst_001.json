@@ -1,0 +1,108 @@
+{
+  "transient_id": "TRANSIENT_001",
+  "metadata": {
+    "description": "X-ray transient detected in the direction of the LMC",
+    "discovery_instrument": "Chandra"
+  },
+
+  "detection": {
+    "instrument": "Chandra ACIS-S",
+    "band_keV": [0.3, 7.0],
+    "exposure_ks": 25,
+    "off_axis_arcmin": 11.75,
+    "localization_arcsec": 2.0,
+    "localization_confidence": 0.90,
+    "net_counts": 180,
+    "snr": 11.6
+  },
+
+  "persistent_constraints": {
+    "pre_flare_limit_erg_s_cm2": 1e-14,
+    "pre_flare_limit_note": "No detectable emission prior to flare",
+    "stacked_limit_erg_s_cm2": 3e-15,
+    "stacked_exposure_ks": 150,
+    "prior_detections": false
+  },
+
+  "temporal": {
+    "spike": {
+      "duration_s": "<10",
+      "rise_time_s": "3-6",
+      "peak_count_rate_cts_s": ">9.7",
+      "peak_count_rate_note": "Frame-time limited lower bound",
+      "fraction_of_total_counts": 0.25
+    },
+    "tail": {
+      "duration_s": 800,
+      "morphology": "decaying_oscillatory"
+    },
+    "overall_morphology": "extremely short very bright hard spike followed by softer decaying tail",
+    "precursor_detected": false
+  },
+
+  "spectral": {
+    "evolution": "hard_to_soft",
+    "hardness_ratio": {
+      "spike": 1.0,
+      "spike_note": "Hard dominated",
+      "tail_range": [0.4, 0.6]
+    },
+    "fits": {
+      "method": "Cash statistics, absorbed",
+      "power_law": {
+        "photon_index": 0.5,
+        "photon_index_err": 0.3
+      },
+      "blackbody": {
+        "kT_keV": 1.8,
+        "kT_keV_err": 0.3
+      },
+      "fit_comparison": "Both models provide statistically comparable fits given count statistics"
+    }
+  },
+
+  "energetics": {
+    "peak_flux_powerlaw_erg_s_cm2": 5.6e-10,
+    "peak_flux_blackbody_erg_s_cm2": 4.0e-10,
+    "peak_flux_band_keV": [0.3, 10.0],
+    "fluence_powerlaw_erg_cm2": 1.1e-8,
+    "fluence_blackbody_erg_cm2": 0.8e-8,
+    "energetics_note": "Conservative lower limits due to frame-time resolution and time-averaged spectral conversion"
+  },
+
+  "counterparts": {
+    "gamma_ray": {
+      "detected": false,
+      "note": "No contemporaneous detections despite field being observed by wide-field gamma-ray monitors at flare time"
+    },
+    "gravitational_wave": {
+      "constraints_available": false
+    },
+    "optical": {
+      "counterpart_in_error_circle": false,
+      "limits_5sigma_mag": {
+        "g": 24.8,
+        "u": 23.9,
+        "i": 24.2
+      },
+      "brightest_source_in_error_circle": {
+        "apparent_mag": 22.7,
+        "morphology": "point-like"
+      },
+      "extended_galaxy_detected": false
+    },
+    "radio": null
+  },
+
+  "context": {
+    "field": "LMC",
+    "stellar_population_note": "Surrounding stellar population consistent with older stars (if source is in LMC)"
+  },
+
+  "ground_truth": {
+    "classification": "thermonuclear_xray_burst",
+    "valid_alternatives": ["thermonuclear_xray_burst", "giant_magnetar_flare"],
+    "luminosity_powerlaw_erg_s_range": [1.6e38, 1.8e38],
+    "luminosity_blackbody_erg_s_range": [1.1e38, 1.3e38]
+  }
+}
