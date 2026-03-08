@@ -1,0 +1,107 @@
+{
+  "spectrum_id": "lmc_flare_23022",
+  "description": "X-ray transient in the Large Magellanic Cloud",
+
+  "source": {
+    "field": "LMC",
+    "distance_kpc": 50,
+    "classification": "thermonuclear X-ray burst",
+    "localization_uncertainty_arcsec": 2,
+    "off_axis_arcmin": 11.75
+  },
+
+  "observation": {
+    "telescope": "Chandra",
+    "instrument": "ACIS-S",
+    "obsid": 23022,
+    "exposure_ks": 25,
+    "energy_range_keV": [0.3, 7.0],
+    "net_counts": 180,
+    "sn_ratio": 11.6
+  },
+
+  "persistent_constraints": {
+    "pre_flare_emission": "none detected",
+    "pre_flare_upper_limit_erg_s": 1e34,
+    "stacked_upper_limit_erg_s": 3e33,
+    "stacked_exposure_ks": 150,
+    "prior_detections": "none"
+  },
+
+  "temporal_properties": {
+    "initial_spike": {
+      "duration_s": "<10",
+      "rise_time_s": "3-6",
+      "count_rate_increase_orders": ">=4",
+      "peak_count_rate_cts_s": ">=9.7 (frame-time limited)",
+      "fraction_of_total_counts": 0.25
+    },
+    "extended_tail": {
+      "duration_s": 800,
+      "morphology": "decaying, oscillatory"
+    },
+    "overall": "extremely short very bright hard spike followed by ~800 s softer decaying tail",
+    "precursor": "none detected"
+  },
+
+  "spectral_properties": {
+    "spectral_evolution": "clear hardening-to-softening: spike very hard (HR~1), tail softens (HR~0.4-0.6)",
+    "hardness_ratio_spike": 1.0,
+    "hardness_ratio_tail_range": [0.4, 0.6]
+  },
+
+  "phenomenology": [
+    "No persistent X-ray emission before or after the event",
+    "<10 s ultra-hard initial spike (hardness ratio ~1) with rise time 3-6 s",
+    "Peak count rate >=9.7 counts/s (frame-time limited lower bound), >=4 orders-of-magnitude increase",
+    "~25% of total flare counts concentrated in the initial spike",
+    "~800 s softer decaying oscillatory tail (HR ~0.4-0.6)",
+    "Strong spectral softening from spike to tail",
+    "Source located in the direction of the Large Magellanic Cloud (LMC, ~50 kpc)",
+    "No gamma-ray or high-energy counterpart detected by wide-field monitors",
+    "No obvious optical counterpart within 2 arcsec localization (depth g~24.8, i~24.2)"
+  ],
+
+  "multiwavelength": {
+    "gamma_ray": "no contemporaneous detections from wide-field monitors",
+    "gravitational_wave": "no constraints available at the time",
+    "optical_counterpart": "no obvious counterpart within 2 arcsec localization",
+    "optical_depth_5sigma": {
+      "g": 24.8,
+      "u": 23.9,
+      "i": 24.2
+    },
+    "brightest_in_error_circle": {
+      "apparent_mag": 22.7,
+      "absolute_mag_at_50kpc": 4.2
+    }
+  },
+
+  "files": {
+    "pha": "flaresp_grp1.pha",
+    "pha_ungrouped": "flaresp.pha",
+    "rmf": "flaresp.rmf",
+    "arf": "flaresp.corr.arf",
+    "background": "flaresp_bkg.pi"
+  },
+
+  "ground_truth": {
+    "expected_model_component": "bbody",
+    "expected_model_sherpa": "xstbabs.abs1 * xsbbody.bb1",
+    "expected_parameters": {
+      "abs1.nH": {"value": 0.0001, "error": 0.247, "unit": "1e22 cm^-2"},
+      "bb1.kT": {"value": 1.85, "error": 0.30, "unit": "keV"},
+      "bb1.norm": {"value": 0.000129, "error": 3.2e-05, "unit": ""}
+    },
+    "expected_reduced_cstat": 0.96,
+    "time_integrated_fits": {
+      "powerlaw": {"gamma": 0.5, "gamma_err": 0.3},
+      "blackbody": {"kT_keV": 1.8, "kT_err": 0.3}
+    },
+    "note": "both power law and blackbody provide statistically comparable fits given count statistics",
+    "physical_interpretation": "thermal emission consistent with hot blackbody at ~1.8 keV"
+  },
+
+  "difficulty": "medium",
+  "notes": "Both power law and blackbody models yield comparable fits. Spectral evolution (hard spike to soft tail) and temporal properties are key physical constraints for model discrimination."
+}

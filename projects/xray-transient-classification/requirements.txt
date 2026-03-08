@@ -1,7 +1,0 @@
-# X-Ray Transient Classification Dependencies
-
-# Testing
-pytest>=7.0.0
-
-# Optional: for advanced astronomical calculations
-# astropy>=5.0
