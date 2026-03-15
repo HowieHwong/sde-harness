@@ -10,6 +10,7 @@ data/
 
 # Logs and results
 logs/
+logs_legacy/
 results/
 *.log
 

@@ -10,19 +10,16 @@ import os
 from pathlib import Path
 from typing import Optional
 
-# Add project root to Python path
 project_root = os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 )
 sys.path.insert(0, project_root)
 
-# Import local modules
 from src.modes import run_csg, run_csp, run_analyze
 from src.utils.data_loader import validate_data_files
 
 
 def main():
-    """Main function"""
     parser = argparse.ArgumentParser(
         description="MatLLMSearch - LLM-based Crystal Structure Generation for Materials Discovery",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -36,10 +33,8 @@ Example usage:
         """,
     )
 
-    # Subcommands
     subparsers = parser.add_subparsers(dest="mode", help="Running mode")
 
-    # Common arguments
     common_args = argparse.ArgumentParser(add_help=False)
     common_args.add_argument("--log-dir", type=str, default="logs", help="Log directory (default: logs)")
     common_args.add_argument("--seed", type=int, default=42, help="Random seed (default: 42)")
@@ -47,7 +42,7 @@ Example usage:
     common_args.add_argument("--model", type=str, default="meta-llama/Meta-Llama-3.1-70B-Instruct",
                            help="LLM model to use")
     common_args.add_argument("--temperature", type=float, default=1.0, help="Temperature for LLM (default: 1.0)")
-    common_args.add_argument("--max-tokens", type=int, default=4000, help="Max tokens for LLM (default: 4000)")
+    common_args.add_argument("--max-tokens", type=int, default=8000, help="Max tokens for LLM (default: 8000)")
 
     # Crystal Structure Generation (CSG) mode
     csg_parser = subparsers.add_parser(
@@ -99,6 +94,10 @@ Example usage:
         "analyze",
         help="Analyze experimental results"
     )
+    analyze_parser.add_argument("--log-dir", type=str, default="logs",
+                           help="Log directory for saving results (default: logs)")
+    analyze_parser.add_argument("--save-label", type=str, default=None,
+                           help="Experiment label for saving results directory (default: model name when --generate is used)")
     analyze_parser.add_argument("--input", type=str, default=None,
                            help="Input CSV file with structures (default: data/llama_test.csv)")
     analyze_parser.add_argument("--results-path", type=str, default=None,
@@ -109,8 +108,8 @@ Example usage:
                            help="Model to use for API generation (default: openai/gpt-4o-mini)")
     analyze_parser.add_argument("--temperature", type=float, default=1.0,
                            help="Temperature for generation (default: 1.0)")
-    analyze_parser.add_argument("--max-tokens", type=int, default=4000,
-                           help="Max tokens for generation (default: 4000)")
+    analyze_parser.add_argument("--max-tokens", type=int, default=8000,
+                           help="Max tokens for generation (default: 8000)")
     analyze_parser.add_argument("--fmt", choices=["poscar", "cif"], default="poscar",
                            help="Structure format for generation (default: poscar)")
     analyze_parser.add_argument("--data-path", type=str, default="data/band_gap_processed_5000.csv",
@@ -131,10 +130,8 @@ Example usage:
                            help="Output JSON file for results")
     analyze_parser.add_argument("--experiment-name", type=str, default="experiment",
                               help="Experiment name (used when --results-path is specified)")
-    analyze_parser.add_argument("--limit", type=int, default=0,
-                           help="Limit number of structures to evaluate (0 = all, for faster testing)")
-    analyze_parser.add_argument("--mlip", type=str, default="chgnet",
-                           help="Machine learning interatomic potential (default: chgnet)")
+    analyze_parser.add_argument("--mlip", type=str, default="chgnet", choices=["chgnet", "m3gnet"],
+                           help="Machine learning interatomic potential (default: chgnet); If 'm3gnet', computes both.")
     analyze_parser.add_argument("--ppd-path", type=str, default="data/2023-02-07-ppd-mp.pkl.gz",
                            help="Path to patched phase diagram file")
     analyze_parser.add_argument("--device", type=str, default="cuda", choices=["cuda", "cpu"],
@@ -146,7 +143,6 @@ Example usage:
         parser.print_help()
         sys.exit(1)
 
-    # Route to appropriate mode
     if args.mode == "csg":
         result = run_csg(args)
         print(f"\\nCSG experiment completed. Results saved to {args.log_dir}")

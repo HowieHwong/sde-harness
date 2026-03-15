@@ -11,7 +11,6 @@ from pymatgen.core.composition import Composition
 
 def validate_data_files() -> bool:
     """Validate that required data files exist"""
-    # For now, just return True since we're using the basic version
     return True
 
 
@@ -20,7 +19,6 @@ def load_seed_structures(data_path: str = "data/band_gap_processed_5000.csv",
     """Load seed structures for initialization"""
     
     try:
-        # Try to load from specified data path
         data_file = Path(data_path)
         if data_file.exists():
             print(f"Loading seed structures from: {data_file}")
@@ -86,15 +84,7 @@ def matches_unit_cell_pattern(comp1: Composition, comp2: Composition) -> bool:
 
 
 def load_training_structures_from_cif_csv(csv_path: str) -> List[Structure]:
-    """
-    Load training structures from CSV file with CIF format.
-    
-    Args:
-        csv_path: Path to CSV file with CIF structures
-        
-    Returns:
-        List of parsed structures
-    """
+    """Load training structures from CSV file with CIF format"""
     df = pd.read_csv(csv_path)
     structures = []
     
@@ -120,7 +110,7 @@ def load_training_structures_from_cif_csv(csv_path: str) -> List[Structure]:
             struct = Structure.from_str(str(cif_str), fmt='cif')
             structures.append(struct)
         except Exception as e:
-            if idx < 3:  # Show first few errors
+            if idx < 3:
                 print(f"Warning: Failed to parse structure at row {idx}: {e}")
             continue
     

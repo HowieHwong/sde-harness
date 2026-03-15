@@ -1,4 +1,4 @@
-"""Structure Generator for MatLLMSearch using SDE-harness framework"""
+"""Structure Generator for MatLLMSearch"""
 
 import json
 import re
@@ -26,9 +26,9 @@ from .config import PROMPT_PATTERN_CSG, PROMPT_PATTERN_CSG_ZEROSHOT, PROMPT_PATT
 
 
 class StructureGenerator:
-    """Structure generator that integrates with SDE-harness Generation framework"""
+    """Structure generator using SDE-harness Generation framework"""
     
-    def __init__(self, model: str, temperature: float = 1.0, max_tokens: int = 4000,
+    def __init__(self, model: str, temperature: float = 1.0, max_tokens: int = 8000,
                  fmt: str = "poscar", task: str = "csg", args: Any = None):
         
         self.model = model
@@ -45,7 +45,6 @@ class StructureGenerator:
         models_file = config_dir / "models.yaml"
         credentials_file = config_dir / "credentials.yaml"
         
-        # Verify files exist
         if not models_file.exists():
             raise FileNotFoundError(
                 f"Models configuration file not found: {models_file}\n"
@@ -67,9 +66,6 @@ class StructureGenerator:
             model_name=model
         )
 
-        # Store generation parameters
-        # Determine if this is a local model or API model
-        # For OpenAI/Anthropic/etc, use max_tokens; for local models, use max_new_tokens
         is_local_model = model.startswith("local/") or not any(x in model for x in ["openai", "anthropic", "gemini", "deepseek"])
         
         if is_local_model:
@@ -79,7 +75,6 @@ class StructureGenerator:
                 "truncation": True
             }
         else:
-            # For API models (OpenAI, Anthropic, etc.), use max_tokens
             self.gen_args = {
                 "temperature": temperature,
                 "max_tokens": max_tokens
@@ -89,7 +84,7 @@ class StructureGenerator:
         self._init_prompt_templates()
     
     def _init_prompt_templates(self) -> None:
-        """Initialize SDE-Harness Prompt templates with custom MatLLMSearch templates"""
+        """Initialize SDE-Harness Prompt templates"""
         
         # CSG Zero-shot template
         self.csg_zeroshot_prompt = Prompt(
@@ -105,7 +100,7 @@ class StructureGenerator:
             custom_template=PROMPT_PATTERN_CSG,
             default_vars={
                 "fmt": self.fmt,
-                "rep_size": 5  # Will be updated per call
+                "rep_size": 5
             }
         )
         
@@ -115,7 +110,7 @@ class StructureGenerator:
             default_vars={
                 "fmt": self.fmt,
                 "compound": getattr(self.args, 'compound', 'Unknown'),
-                "rep_size": 5  # Will be updated per call
+                "rep_size": 5
             }
         )
     
@@ -133,6 +128,8 @@ class StructureGenerator:
         
         # Generate responses using SDE-Harness Generation
         responses = []
+        token_usage_list = []
+        
         for i, instruction in enumerate(instructions):
             try:
                 result = self.generator.generate(
@@ -143,15 +140,49 @@ class StructureGenerator:
                 response_text = result.get("text", "") if isinstance(result, dict) else str(result)
                 responses.append(response_text)
                 
+                # Extract token usage
+                if isinstance(result, dict) and "usage" in result:
+                    usage = result["usage"]
+                    if usage is not None:
+                        # Handle LiteLLM format (prompt_tokens, completion_tokens)
+                        token_usage_list.append({
+                            "input_tokens": usage.get("prompt_tokens", usage.get("input_tokens", 0)),
+                            "output_tokens": usage.get("completion_tokens", usage.get("output_tokens", 0)),
+                            "total_tokens": usage.get("total_tokens", 0)
+                        })
+                    else:
+                        estimated_input = self._estimate_tokens(instruction)
+                        estimated_output = self._estimate_tokens(response_text)
+                        token_usage_list.append({
+                            "input_tokens": estimated_input,
+                            "output_tokens": estimated_output,
+                            "total_tokens": estimated_input + estimated_output
+                        })
+                else:
+                    estimated_input = self._estimate_tokens(instruction)
+                    estimated_output = self._estimate_tokens(response_text)
+                    token_usage_list.append({
+                        "input_tokens": estimated_input,
+                        "output_tokens": estimated_output,
+                        "total_tokens": estimated_input + estimated_output
+                    })
+                
             except Exception as e:
                 print(f"Generation error for instruction {i+1}: {e}")
-                if i == 0:  # Show full error for first failure
+                if i == 0:
                     import traceback
                     print(f"Full traceback:")
                     traceback.print_exc()
                     print(f"Model: {self.model}")
                     print(f"Gen args: {self.gen_args}")
                 responses.append("")
+                token_usage_list.append({
+                    "input_tokens": 0,
+                    "output_tokens": 0,
+                    "total_tokens": 0
+                })
+        
+        self._last_token_usage = token_usage_list
         
         # Parse structures from responses
         structures = self._parse_structures_from_responses(responses)
@@ -179,7 +210,6 @@ class StructureGenerator:
             
             # Select appropriate prompt template and build instruction
             if self.task == "csg":
-                # Update variables for this specific generation
                 self.csg_prompt.add_vars(
                     input=input_json,
                     rep_size=num_offspring
@@ -187,7 +217,6 @@ class StructureGenerator:
                 instruction = self.csg_prompt.build()
                 
             elif self.task == "csp":
-                # Update variables for this specific generation
                 self.csp_prompt.add_vars(
                     input=input_json,
                     rep_size=num_offspring
@@ -280,12 +309,10 @@ class StructureGenerator:
         return structures
     
     def _parse_single_response(self, response: str) -> List[Structure]:
-        """Parse structures from a single response - simple approach looking for format pattern"""
+        """Parse structures from a single response"""
         structures = []
         
-        # Simple pattern: look for '"fmt": "content"' in the response (where fmt is poscar or cif)
         import re
-        # Pattern handles various endings: closing quote, or end of string/object
         pattern = rf'"{self.fmt}"\s*:\s*"([^"]*(?:\\.[^"]*)*?)(?:"|$|(?=\s*}}))' 
         matches = re.finditer(pattern, response, re.IGNORECASE | re.DOTALL)
         
@@ -294,15 +321,12 @@ class StructureGenerator:
                 # Extract and clean the structure content
                 structure_content = match.group(1)
                 
-                # Replace escaped newlines with actual newlines (handle both \\n and \n)
-                structure_content = structure_content.replace('\\\\n', '\n')  # Double backslash first
-                structure_content = structure_content.replace('\\n', '\n')    # Then single backslash
-                
-                # Remove any extra escaping
+                structure_content = structure_content.replace('\\\\n', '\n')
+                structure_content = structure_content.replace('\\n', '\n')
                 structure_content = structure_content.replace('\\"', '"')
-                structure_content = structure_content.replace('\\\\', '\\')   # Fix remaining double backslashes
+                structure_content = structure_content.replace('\\\\', '\\')
                 
-                # Fix POSCAR if needed - reconstruct atom counts from actual coordinates
+                # Fix POSCAR:reconstruct atom counts from actual coordinates
                 if self.fmt.lower() == 'poscar':
                     structure_content = self._fix_poscar_counts(structure_content)
                 
@@ -317,7 +341,7 @@ class StructureGenerator:
         return structures
     
     def _fix_poscar_counts(self, poscar_content: str) -> str:
-        """Fix POSCAR by reconstructing atom counts from actual coordinate lines"""
+        """Fix POSCAR by reconstructing atom counts from coordinate lines"""
         lines = poscar_content.strip().split('\n')
         
         if len(lines) < 8:  # Minimum lines needed for valid POSCAR
@@ -342,26 +366,23 @@ class StructureGenerator:
                     continue
                     
                 parts = line.split()
-                if len(parts) >= 4:  # x y z element
+                if len(parts) >= 4:
                     element = parts[3]
                     element_counts[element] = element_counts.get(element, 0) + 1
             
             if not element_counts:
                 return poscar_content
             
-            # Reconstruct POSCAR with correct counts
-            # Update formula line (line 0)
             formula = ""
             for element, count in element_counts.items():
                 formula += f"{element}{count} "
             lines[0] = formula.strip()
             
-            # Update element symbols line (usually line 5)
             elements = list(element_counts.keys())
             if len(lines) > 5:
                 lines[5] = " ".join(elements)
             
-            # Update count line (usually line 6)  
+            # Update count line
             counts = [str(element_counts[el]) for el in elements]
             if len(lines) > 6:
                 lines[6] = " ".join(counts)
@@ -394,18 +415,21 @@ class StructureGenerator:
         
         return structure_strings
     
+    def _estimate_tokens(self, text: str) -> int:
+        """Rough token estimation (~4 characters per token)"""
+        if not text:
+            return 0
+        return max(1, len(text) // 4)
+    
     def _validate_structure(self, structure: Structure) -> bool:
         """Basic structure validation"""
         try:
-            # Check if structure has valid composition
             if structure.composition.num_atoms <= 0:
                 return False
             
-            # Check if structure has reasonable volume
             if structure.volume <= 0 or structure.volume >= 30 * structure.composition.num_atoms:
                 return False
             
-            # Check if structure is 3D periodic
             if not structure.is_3d_periodic:
                 return False
             

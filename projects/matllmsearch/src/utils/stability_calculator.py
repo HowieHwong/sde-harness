@@ -1,4 +1,4 @@
-"""Stability calculator for SDE-harness integration"""
+"""Stability calculator for crystal structures"""
 
 import numpy as np
 import torch
@@ -24,6 +24,7 @@ class StabilityResult:
     bulk_modulus: float = -np.inf
     bulk_modulus_relaxed: float = -np.inf
     structure_relaxed: Optional[Structure] = None
+    e_hull_distance_m3gnet: float = np.inf
 
 
 class StabilityCalculator:
@@ -34,13 +35,12 @@ class StabilityCalculator:
             self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
         else:
             self.device = device
-        self.mlip = mlip
-        self.ppd_path = ppd_path  # Store for multi-GPU workers
+        self.mlip = mlip.lower()
+        self.ppd_path = ppd_path
         self.e_hull = EHullCalculator(ppd_path)
         self.adaptor = AseAtomsAdaptor()
         self.num_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 1
         
-        # Initialize models exactly as in original
         self.chgnet = CHGNet.load().to(self.device)
         converter = CrystalGraphConverter(
             atom_graph_cutoff=6, bond_graph_cutoff=3, algorithm="fast", on_isolated_atoms="warn"
@@ -48,6 +48,20 @@ class StabilityCalculator:
         self.chgnet.graph_converter = converter
         self.relaxer = StructOptimizer(model=self.chgnet, use_device='cuda:0')
         self.EquationOfState = EquationOfState
+        
+        # Initialize M3GNet if mlip is 'm3gnet'
+        self.m3gnet_relaxer = None
+        if self.mlip == 'm3gnet':
+            try:
+                import matgl
+                from matgl.ext.ase import Relaxer as M3GNetRelaxer
+                pot = matgl.load_model("M3GNet-MP-2021.2.8-PES")
+                self.m3gnet_relaxer = M3GNetRelaxer(potential=pot)
+                print(f"Initialized M3GNet relaxer")
+            except ImportError:
+                print("Warning: matgl not available. Falling back to CHGNet for M3GNet results.")
+            except Exception as e:
+                print(f"Warning: Failed to initialize M3GNet: {e}. Falling back to CHGNet for M3GNet results.")
         
         print(f"Initialized stability calculator with {mlip} on {self.device}")
     
@@ -97,9 +111,49 @@ class StabilityCalculator:
             else:
                 e_hull_distance = np.inf
             
-            # Calculate bulk modulus (simplified - return a placeholder)
-            bulk_modulus = 100.0 if not wo_bulk else -np.inf
-            bulk_modulus_relaxed = 100.0 if not wo_bulk else -np.inf
+            # Calculate bulk modulus using CHGNet
+            if not wo_bulk:
+                try:
+                    # Use CHGNet EquationOfState; Input relaxed structure
+                    eos = self.EquationOfState(model=self.chgnet)
+                    eos.fit(atoms=final_structure, steps=500, fmax=0.1, verbose=False)
+                    # CHGNet returns bulk modulus in eV/A^3; convert to GPa
+                    bulk_eva3 = float(eos.get_bulk_modulus(unit="eV/A^3"))
+                    bulk_modulus_relaxed = bulk_eva3 * 160.2176621
+                    bulk_modulus = bulk_modulus_relaxed
+                    if np.isnan(bulk_modulus_relaxed) or np.isinf(bulk_modulus_relaxed) or bulk_modulus_relaxed <= 0:
+                        bulk_modulus = -np.inf
+                        bulk_modulus_relaxed = -np.inf
+                except Exception as bulk_error:
+                    print(f"Bulk modulus calculation error: {bulk_error}")
+                    bulk_modulus = -np.inf
+                    bulk_modulus_relaxed = -np.inf
+            else:
+                bulk_modulus = -np.inf
+                bulk_modulus_relaxed = -np.inf
+            
+            # Compute M3GNet e_hull_distance
+            e_hull_distance_m3gnet = np.inf
+            if not wo_ehull:
+                if self.mlip == 'm3gnet' and self.m3gnet_relaxer is not None:
+                    # If mlip is m3gnet, compute actual M3GNet results
+                    try:
+                        m3gnet_result = self._safe_timeout_wrapper(
+                            self._relax_structure_m3gnet, 180, structure
+                        )
+                        if m3gnet_result:
+                            final_total_energy_m3gnet = float(m3gnet_result['final_energy'])
+                            structure_relaxed_m3gnet = m3gnet_result['final_structure']
+                            se_list = [{'structure': structure_relaxed_m3gnet, 'energy': final_total_energy_m3gnet}]
+                            seh_list = self.e_hull.get_e_hull(se_list)
+                            e_hull_distance_m3gnet = seh_list[0]['e_hull']
+                    except Exception as e:
+                        print(f"M3GNet E-hull calculation error: {e}")
+                        # Fallback to CHGNet if M3GNet fails
+                        e_hull_distance_m3gnet = e_hull_distance
+                else:
+                    # If mlip is chgnet (or m3gnet failed), use CHGNet results as fallback
+                    e_hull_distance_m3gnet = e_hull_distance
             
             return StabilityResult(
                 energy=initial_energy,
@@ -108,7 +162,8 @@ class StabilityCalculator:
                 e_hull_distance=e_hull_distance,
                 bulk_modulus=bulk_modulus,
                 bulk_modulus_relaxed=bulk_modulus_relaxed,
-                structure_relaxed=final_structure
+                structure_relaxed=final_structure,
+                e_hull_distance_m3gnet=e_hull_distance_m3gnet
             )
             
         except Exception as e:
@@ -138,6 +193,38 @@ class StabilityCalculator:
             
         except Exception as e:
             print(f"Relaxation error: {e}")
+            return None
+    
+    def _relax_structure_m3gnet(self, structure: Structure) -> Optional[dict]:
+        """Relax structure using M3GNet and return final energy and structure"""
+        try:
+            relax_results = self.m3gnet_relaxer.relax(structure)
+            final_structure = relax_results['final_structure']
+            
+            trajectory = relax_results.get('trajectory')
+            if trajectory is None:
+                print("Warning: M3GNet relaxation missing trajectory")
+                return None
+            
+            if not hasattr(trajectory, 'energies'):
+                print("Warning: M3GNet trajectory missing energies attribute")
+                return None
+            
+            energies = trajectory.energies
+            if not energies or len(energies) == 0:
+                print("Warning: M3GNet trajectory energies is empty")
+                return None
+            
+            # Energy is total energy
+            final_energy = float(energies[-1])
+            
+            return {
+                'final_energy': final_energy,
+                'final_structure': final_structure
+            }
+            
+        except Exception as e:
+            print(f"M3GNet relaxation error: {e}")
             return None
     
     def _safe_timeout_wrapper(self, func, timeout_seconds: int, *args, **kwargs):

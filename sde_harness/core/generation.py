@@ -4,6 +4,8 @@ from typing import Any, Dict, List, Optional, Union
 import yaml
 from copy import deepcopy
 import gc
+import os
+import re
 
 import weave
 
@@ -38,6 +40,29 @@ def load_models_and_credentials(models_file="models.yaml", credentials_file="cre
     return models, credentials
 
 
+def expand_env_vars_in_dict(d: Dict[str, Any]) -> Dict[str, Any]:
+    """Expand environment variables in credential dictionary values."""
+    expanded = {}
+    for key, value in d.items():
+        if isinstance(value, str) and value.startswith("${") and value.endswith("}"):
+            # Handle ${VAR_NAME} format
+            var_name = value[2:-1]
+            env_value = os.getenv(var_name)
+            if env_value is None:
+                raise ValueError(f"Environment variable {var_name} is not set. Please set it or update credentials.yaml with the actual API key.")
+            expanded[key] = env_value
+        elif isinstance(value, str) and value.startswith("$") and not value.startswith("$$"):
+            # Handle $VAR_NAME format (but not $$ which is escaped)
+            var_name = value[1:]
+            env_value = os.getenv(var_name)
+            if env_value is None:
+                raise ValueError(f"Environment variable {var_name} is not set. Please set it or update credentials.yaml with the actual API key.")
+            expanded[key] = env_value
+        else:
+            expanded[key] = value
+    return expanded
+
+
 def load_model_config(model_name, models, credentials):
     try:
         model_config = deepcopy(models[model_name])
@@ -50,6 +75,8 @@ def load_model_config(model_name, models, credentials):
         if credentials_tag is not None:
             try:
                 credentials_config = credentials[credentials_tag]
+                # Expand environment variables in credentials
+                credentials_config = expand_env_vars_in_dict(credentials_config)
             except KeyError:
                 raise KeyError(f"Credentials `{credentials_tag}` not found in credentials_file")
     
@@ -282,10 +309,16 @@ class Generation:
             messages = [{"role": "user", "content": prompt}]
         
         try:
+            # Prepare credentials for LiteLLM
+            litellm_credentials = model_config["credentials"].copy()
+            # Remove base_url if present for OpenRouter (LiteLLM handles it automatically)
+            if model_config['provider'] == 'openrouter' and 'base_url' in litellm_credentials:
+                litellm_credentials.pop('base_url', None)
+            
             response = litellm.completion(
                 model=model_id,
                 messages=messages,
-                **model_config["credentials"],
+                **litellm_credentials,
                 **kwargs,
             )
         except Exception as e:
@@ -330,6 +363,10 @@ class Generation:
                 raise ValueError(f"Error calculating max_length: {e}")
 
         try:
+            # Calculate input tokens before generation
+            input_ids = self.hf_tokenizer(prompt, return_tensors="pt").input_ids
+            input_tokens = input_ids.shape[1]
+            
             outputs = self.generator(
                 prompt,
                 max_length=max_length,
@@ -341,12 +378,25 @@ class Generation:
             # Extract only the newly generated part
             new_text = generated[len(prompt):].strip()
             
+            # Calculate output tokens more accurately
+            # Tokenize the full generated text to get total tokens
+            full_output_ids = self.hf_tokenizer(generated, return_tensors="pt").input_ids
+            total_tokens = full_output_ids.shape[1]
+            
+            # Output tokens = total - input tokens
+            # This accounts for any special tokens that might be added
+            output_tokens = max(0, total_tokens - input_tokens)
+            
             return {
                 "model_name": model_config["model_name"],
                 "provider": model_config["provider"],
                 "model": model_config["model"],
                 "text": new_text,
-                # "usage": None,
+                "usage": {
+                    "prompt_tokens": input_tokens,
+                    "completion_tokens": output_tokens,
+                    "total_tokens": total_tokens,
+                },
             }
         except Exception as e:
             raise RuntimeError(f"HuggingFace generation failed for model {model_config['model']}: {e}")

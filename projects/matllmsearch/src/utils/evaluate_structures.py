@@ -3,14 +3,7 @@
 """
 Evaluation script for generated crystal structures.
 
-This script evaluates a list of generated structures and computes:
-- Diversity metrics (composition diversity, structural diversity)
-- Novelty metrics (SUN score - Structures Unique and Novel)
-- Success rate metrics (stability rate, validity rate)
-
-Usage:
-    python evaluate_structures.py --input structures.json --output results.csv
-    python evaluate_structures.py --input structures.csv --format poscar --training-data training_structures.csv
+Computes diversity, novelty (SUN score), and success rate metrics.
 """
 
 import os
@@ -26,7 +19,6 @@ from tqdm import tqdm
 import warnings
 warnings.filterwarnings('ignore')
 
-# Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from pymatgen.core.structure import Structure
@@ -34,7 +26,7 @@ from pymatgen.core.composition import Composition
 from pymatgen.analysis.structure_matcher import StructureMatcher
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 
-from ..evaluators.materials_oracle import MaterialsOracle, MaterialsEvaluation
+from .materials_oracle import MaterialsOracle, MaterialsEvaluation
 from .stability_calculator import StabilityCalculator
 
 
@@ -59,7 +51,7 @@ class StructureEvaluator:
         self.matcher = StructureMatcher()
         self.training_structures = training_structures or []
         
-        # Build training structure lookup for novelty
+        # Build training structure lookup for novelty if provided
         if self.training_structures:
             print(f"Building lookup for {len(self.training_structures)} training structures...")
             self.training_formulas = defaultdict(list)
@@ -86,11 +78,9 @@ class StructureEvaluator:
             return structure_data
         
         if isinstance(structure_data, dict):
-            # Try to find structure in dict
             for key in ['structure', 'poscar', 'cif', 'Structure', 'StructureRelaxed']:
                 if key in structure_data:
                     return self.parse_structure(structure_data[key], fmt)
-            # If dict contains structure directly (as JSON string)
             if 'structure' in structure_data:
                 structure_str = structure_data['structure']
                 if isinstance(structure_str, str):
@@ -108,7 +98,6 @@ class StructureEvaluator:
         
         if isinstance(structure_data, str):
             if fmt == "auto":
-                # Try different formats
                 for fmt_try in ['json', 'poscar', 'cif']:
                     try:
                         return Structure.from_str(structure_data, fmt=fmt_try)
@@ -138,12 +127,10 @@ class StructureEvaluator:
         
         if file_path.suffix == '.csv':
             df = pd.read_csv(file_path)
-            # Try to find structure column (prefer StructureRelaxed, then Structure)
             struct_cols = []
             for preferred in ['StructureRelaxed', 'Structure', 'structure_relaxed', 'structure']:
                 if preferred in df.columns:
                     struct_cols.append(preferred)
-            # Also check for any column with 'structure' in name
             struct_cols.extend([col for col in df.columns 
                           if 'structure' in col.lower() and col not in struct_cols])
             
@@ -157,12 +144,11 @@ class StructureEvaluator:
                     struct = self.parse_structure(struct_str, fmt)
                     if struct:
                         structures.append(struct)
-                    elif idx < 3:  # Show first few errors
+                    elif idx < 3:
                         print(f"Warning: Failed to parse structure at row {idx}")
             else:
                 print("Warning: No structure column found in CSV")
                 print(f"Available columns: {list(df.columns)}")
-                # Try to parse entire row as structure
                 for idx, row in tqdm(df.iterrows(), total=len(df), desc="Parsing structures"):
                     struct = self.parse_structure(row.to_dict(), fmt)
                     if struct:
@@ -178,7 +164,6 @@ class StructureEvaluator:
                     if struct:
                         structures.append(struct)
             elif isinstance(data, dict):
-                # Try to find structures in dict
                 for key, value in data.items():
                     if isinstance(value, list):
                         for item in value:
@@ -191,7 +176,6 @@ class StructureEvaluator:
                             structures.append(struct)
         
         else:
-            # Try to read as text file (POSCAR format)
             try:
                 with open(file_path, 'r') as f:
                     content = f.read()
@@ -205,29 +189,17 @@ class StructureEvaluator:
         return structures
     
     def _validate_structure(self, structure: Structure) -> bool:
-        """
-        Validate if structure is structurally valid.
-        
-        Args:
-            structure: Structure to validate
-            
-        Returns:
-            True if valid, False otherwise
-        """
+        """Validate if structure is structurally valid"""
         try:
-            # Check if structure has valid composition
             if structure.composition.num_atoms <= 0:
                 return False
             
-            # Check if structure has reasonable volume
             if structure.volume <= 0 or structure.volume >= 30 * structure.composition.num_atoms:
                 return False
             
-            # Check if structure is 3D periodic
             if not structure.is_3d_periodic:
                 return False
             
-            # Check for valid lattice
             if structure.lattice.volume <= 0:
                 return False
             
@@ -236,17 +208,8 @@ class StructureEvaluator:
             return False
     
     def _validate_composition(self, composition: Composition) -> bool:
-        """
-        Validate if composition is valid.
-        
-        Args:
-            composition: Composition to validate
-            
-        Returns:
-            True if valid, False otherwise
-        """
+        """Validate if composition is valid"""
         try:
-            # Check for valid elements
             if len(composition.elements) == 0:
                 return False
             
@@ -254,7 +217,7 @@ class StructureEvaluator:
             if any(count <= 0 for count in composition.values()):
                 return False
             
-            # Check for reasonable number of elements (typically 1-10)
+            # Check for reasonable number of elements
             if len(composition.elements) > 10:
                 return False
             
@@ -263,15 +226,7 @@ class StructureEvaluator:
             return False
     
     def calculate_composition_diversity(self, structures: List[Structure]) -> Dict[str, Any]:
-        """
-        Calculate composition diversity metrics.
-        
-        Args:
-            structures: List of structures
-            
-        Returns:
-            Dictionary with diversity metrics
-        """
+        """Calculate composition diversity metrics"""
         if not structures:
             return {
                 'composition_diversity': 0.0,
@@ -293,15 +248,7 @@ class StructureEvaluator:
         }
     
     def calculate_validity(self, structures: List[Structure]) -> Dict[str, Any]:
-        """
-        Calculate structural and composition validity metrics.
-        
-        Args:
-            structures: List of structures
-            
-        Returns:
-            Dictionary with validity metrics
-        """
+        """Calculate structural and composition validity metrics"""
         if not structures:
             return {
                 'structural_validity': 0.0,
@@ -330,15 +277,7 @@ class StructureEvaluator:
         }
     
     def calculate_structural_diversity(self, structures: List[Structure]) -> Dict[str, Any]:
-        """
-        Calculate structural diversity using StructureMatcher.
-        
-        Args:
-            structures: List of structures
-            
-        Returns:
-            Dictionary with structural diversity metrics
-        """
+        """Calculate structural diversity using StructureMatcher"""
         if len(structures) < 2:
             return {
                 'structural_diversity': 0.0,
@@ -371,15 +310,7 @@ class StructureEvaluator:
         }
     
     def calculate_composition_novelty(self, structures: List[Structure]) -> Dict[str, Any]:
-        """
-        Calculate composition novelty - novel compositions compared to training data.
-        
-        Args:
-            structures: List of generated structures
-            
-        Returns:
-            Dictionary with composition novelty metrics
-        """
+        """Calculate composition novelty compared to training data"""
         if not structures:
             return {
                 'composition_novelty': 0.0,
@@ -403,7 +334,6 @@ class StructureEvaluator:
             except:
                 continue
         
-        # Get unique compositions from training data
         training_compositions = set()
         for struct in self.training_structures:
             try:
@@ -425,15 +355,7 @@ class StructureEvaluator:
         }
     
     def calculate_structural_novelty(self, structures: List[Structure]) -> Dict[str, Any]:
-        """
-        Calculate structural novelty - novel structures (different structures even with same composition).
-        
-        Args:
-            structures: List of generated structures
-            
-        Returns:
-            Dictionary with structural novelty metrics
-        """
+        """Calculate structural novelty (different structures even with same composition)"""
         if not structures:
             return {
                 'structural_novelty': 0.0,
@@ -478,104 +400,9 @@ class StructureEvaluator:
             'total_structures': total
         }
     
-    def calculate_sun_score_neurips(self, structures: List[Structure], evaluations: List[MaterialsEvaluation]) -> Dict[str, Any]:
-        """
-        Compute SUN score aligned with NeurIPS evaluation helper:
-        1) Take stable subset (E-hull < 0.1 eV/atom) from evaluated structures
-        2) Find unique structures within the stable subset
-        3) Count how many of those unique stable structures are novel w.r.t. training/reference set
-        4) SUN score = novel_unique_stable / total_generated (denominator = all generated structures)
-
-        Returns dict with keys: sun_score, novel_unique_stable, unique_stable, total_generated
-        """
-        total_generated = len(structures)
-        if not structures or not evaluations:
-            return {
-                'sun_score': 0.0,
-                'novel_unique_stable': 0,
-                'unique_stable': 0,
-                'total_generated': total_generated,
-            }
-
-        # Build stable subset (use valid evals with e_hull_distance < 0.1)
-        stable_structs: List[Structure] = []
-        for struct, ev in zip(structures, evaluations):
-            try:
-                if ev and ev.valid and ev.e_hull_distance is not None and ev.e_hull_distance < 0.1:
-                    stable_structs.append(struct)
-            except Exception:
-                continue
-
-        if not stable_structs:
-            return {
-                'sun_score': 0.0,
-                'novel_unique_stable': 0,
-                'unique_stable': 0,
-                'total_generated': total_generated,
-            }
-
-        # Step 1: find unique within stable set using Structure.matches like NeurIPS (per-formula grouping)
-        unique_stable: List[Structure] = []
-        for s in stable_structs:
-            is_unique = True
-            for u in unique_stable:
-                try:
-                    # Use pymatgen Structure.matches with scaling enabled, no supercells
-                    if s.matches(u, scale=True, attempt_supercell=False):
-                        is_unique = False
-                        break
-                except Exception:
-                    continue
-            if is_unique:
-                unique_stable.append(s)
-
-        # Step 2: compare unique stable to training/reference set
-        novel_count = 0
-        if self.training_structures:
-            # Build quick lookup by reduced formula
-            training_lookup = self.training_formulas if hasattr(self, 'training_formulas') and self.training_formulas else {}
-            if not training_lookup:
-                training_lookup = defaultdict(list)
-                for ts in self.training_structures:
-                    try:
-                        training_lookup[ts.composition.reduced_formula].append(ts)
-                    except Exception:
-                        continue
-
-            for s in unique_stable:
-                is_novel = True
-                formula = s.composition.reduced_formula
-                if formula in training_lookup:
-                    for ref in training_lookup[formula]:
-                        try:
-                            if s.matches(ref, scale=True, attempt_supercell=False):
-                                is_novel = False
-                                break
-                        except Exception:
-                            continue
-                if is_novel:
-                    novel_count += 1
-        else:
-            # If no training/reference set, treat all unique stable as novel per NeurIPS fallback
-            novel_count = len(unique_stable)
-
-        sun_score = novel_count / total_generated if total_generated > 0 else 0.0
-        return {
-            'sun_score': sun_score,
-            'novel_unique_stable': novel_count,
-            'unique_stable': len(unique_stable),
-            'total_generated': total_generated,
-        }
-
     def calculate_overall_novelty(self, structures: List[Structure]) -> Dict[str, Any]:
         """
-        Calculate overall novelty (both composition-novel AND structural-novel) WITHOUT stability requirement.
-        
-        Overall novelty = (structures that are composition-novel AND structural-novel) / (total generated structures)
-        
-        No stability filter is applied. Denominator is total structures (all generated structures).
-
-        Returns dict with 'overall_novelty', 'both_novel_count', and 'total_structures'.
+        Calculate overall novelty (composition-novel AND structural-novel) without stability requirement.
         """
         total = len(structures)
         if total == 0:
@@ -586,7 +413,6 @@ class StructureEvaluator:
             }
 
         both_novel_count = 0
-        # If no training data, nothing can be non-novel; treat as zero to avoid inflating
         if not self.training_structures:
             return {
                 'overall_novelty': 0.0,
@@ -594,7 +420,6 @@ class StructureEvaluator:
                 'total_structures': total,
             }
 
-        # Pre-built training_formulas is expected
         for struct in structures:
             try:
                 formula = struct.composition.reduced_formula
@@ -605,7 +430,6 @@ class StructureEvaluator:
             comp_is_novel = formula not in self.training_formulas
 
             if not comp_is_novel:
-                # If composition exists in reference, cannot be both-novel
                 continue
 
             # Structural novel check
@@ -632,13 +456,6 @@ class StructureEvaluator:
                      evaluations: Optional[List[MaterialsEvaluation]] = None) -> Dict[str, Any]:
         """
         Calculate SUN (Structures Unique and Novel) rate.
-        
-        SUN rate = (structures that are stable (E-hull < 0.0) AND composition-novel AND structural-novel) / (total generated structures)
-        
-        Requires evaluations to be provided. Only counts structures with E-hull distance < 0.0 (stable).
-        Denominator is always total structures (all generated structures).
-
-        Returns dict with 'sun_score', 'both_novel_count', and 'total_structures'.
         """
         total = len(structures)
         if total == 0:
@@ -649,7 +466,6 @@ class StructureEvaluator:
             }
 
         both_novel_count = 0
-        # If no training data, nothing can be non-novel; treat as zero to avoid inflating
         if not self.training_structures:
             return {
                 'sun_score': 0.0,
@@ -657,16 +473,14 @@ class StructureEvaluator:
                 'total_structures': total,
             }
 
-        # Filter by stability - REQUIRED for SUN score
         if evaluations is None or len(evaluations) != len(structures):
-            # Without evaluations, cannot calculate SUN (requires stability info)
             return {
                 'sun_score': 0.0,
                 'both_novel_count': 0,
                 'total_structures': total,
             }
 
-        # Only consider structures with E-hull < 0.0 (stable)
+        # structures with Ed < 0.0 ((meta)stable)
         stable_indices = []
         for i, (struct, ev) in enumerate(zip(structures, evaluations)):
             try:
@@ -677,10 +491,8 @@ class StructureEvaluator:
             except Exception:
                 continue
         
-        # Only check stable structures for novelty
         structures_to_check = [structures[i] for i in stable_indices]
 
-        # Pre-built training_formulas is expected
         for struct in structures_to_check:
             try:
                 formula = struct.composition.reduced_formula
@@ -691,11 +503,9 @@ class StructureEvaluator:
             comp_is_novel = formula not in self.training_formulas
 
             if not comp_is_novel:
-                # If composition exists in reference, cannot be both-novel
                 continue
 
             # Structural novel check
-            # reference set for the same formula; if formula absent, treat as novel structurally
             struct_is_novel = True
             refs = self.training_formulas.get(formula, [])
             for ref in refs:
@@ -716,19 +526,7 @@ class StructureEvaluator:
         }
 
     def calculate_novelty(self, structures: List[Structure]) -> Dict[str, Any]:
-        """
-        Calculate overall novelty (SUN score) - Structures Unique and Novel.
-        
-        SUN score = (structures unique in generated set AND not in training set) / (total generated structures)
-        
-        Also computes composition and structural novelty separately.
-        
-        Args:
-            structures: List of generated structures
-            
-        Returns:
-            Dictionary with novelty metrics
-        """
+        """Calculate overall novelty (SUN score) and separate composition/structural novelty"""
         if not structures:
             return {
                 'sun_score': 0.0,
@@ -739,7 +537,6 @@ class StructureEvaluator:
         
         print(f"Calculating novelty for {len(structures)} structures...")
         
-        # Step 1: Find unique structures within generated set
         print("Step 1: Finding unique structures within generated set...")
         unique_structures = []
         for i, struct in enumerate(tqdm(structures, desc="Finding unique structures")):
@@ -757,7 +554,6 @@ class StructureEvaluator:
         
         print(f"Found {len(unique_structures)} unique structures out of {len(structures)}")
         
-        # Step 2: Compare with training set
         if not self.training_structures:
             print("No training structures provided, skipping novelty comparison")
             return {
@@ -803,16 +599,7 @@ class StructureEvaluator:
         }
     
     def calculate_success_rate(self, evaluations: List[MaterialsEvaluation]) -> Dict[str, Any]:
-        """
-        Calculate success rate metrics based on stability and validity.
-        Includes M3GNet metastability (E-hull < 0.1 eV/atom).
-        
-        Args:
-            evaluations: List of MaterialsEvaluation objects
-            
-        Returns:
-            Dictionary with success rate metrics
-        """
+        """Calculate success rate metrics based on stability and validity"""
         if not evaluations:
             return {
                 'validity_rate': 0.0,
@@ -841,14 +628,20 @@ class StructureEvaluator:
                        if not (np.isnan(eval.e_hull_distance) or np.isinf(eval.e_hull_distance))
                        and eval.e_hull_distance < 0.10)
         
-        # Metastability rates
         metastability_0 = stable_0 / total if total > 0 else 0.0
         metastability_003 = stable_003 / total if total > 0 else 0.0
         metastability_01 = stable_01 / total if total > 0 else 0.0
-        # M3GNet metastability: E-hull < 0.1 eV/atom (same as metastability_01)
-        m3gnet_metastability = metastability_01
         
-        # Success rate: valid AND stable (< 0.1 eV/atom)
+        # M3GNet metastability
+        m3gnet_stable_01 = sum(1 for eval in valid_evals 
+                              if not (np.isnan(eval.e_hull_distance_m3gnet) or np.isinf(eval.e_hull_distance_m3gnet))
+                              and eval.e_hull_distance_m3gnet < 0.10)
+        m3gnet_metastability = m3gnet_stable_01 / total if total > 0 else 0.0
+        if m3gnet_stable_01 == 0 and all(eval.e_hull_distance_m3gnet == np.inf for eval in valid_evals):
+            # Fallback to CHGNet if M3GNet not computed
+            m3gnet_metastability = metastability_01
+        
+        # Success rate: valid AND metastable (< 0.1 eV/atom)
         success_count = sum(1 for eval in valid_evals 
                            if not (np.isnan(eval.e_hull_distance) or np.isinf(eval.e_hull_distance))
                            and eval.e_hull_distance <= 0.10)
@@ -860,11 +653,12 @@ class StructureEvaluator:
             'metastability_0.03': metastability_003,
             'metastability_0.10': metastability_01,
             'm3gnet_metastability': m3gnet_metastability,
+            'm3gnet_stable_structures_0.10': m3gnet_stable_01,
             'stable_structures_0': stable_0,
             'stable_structures_0.03': stable_003,
             'stable_structures_0.10': stable_01,
-            'stability_rate_0.03': metastability_003,  # Keep for backward compatibility
-            'stability_rate_0.10': metastability_01,  # Keep for backward compatibility
+            'stability_rate_0.03': metastability_003,
+            'stability_rate_0.10': metastability_01,
             'success_rate': success_count / total if total > 0 else 0.0,
             'success_structures': success_count,
             'total_structures': total
@@ -872,16 +666,7 @@ class StructureEvaluator:
     
     def evaluate(self, structures: List[Structure], 
                  calculate_stability: bool = True) -> Dict[str, Any]:
-        """
-        Comprehensive evaluation of structures.
-        
-        Args:
-            structures: List of structures to evaluate
-            calculate_stability: Whether to calculate stability metrics (can be slow)
-            
-        Returns:
-            Dictionary with all evaluation metrics
-        """
+        """Comprehensive evaluation of structures"""
         print(f"Evaluating {len(structures)} structures...")
         
         results = {
@@ -897,7 +682,6 @@ class StructureEvaluator:
         results['composition_validity'] = validity['composition_validity']
         results['validity'] = validity
         
-        # Composition diversity
         print("\n" + "="*60)
         print("Calculating composition diversity...")
         print("="*60)
@@ -913,7 +697,7 @@ class StructureEvaluator:
         results['structural_diversity'] = struct_div['structural_diversity']
         results['structural_diversity_details'] = struct_div
         
-        # Stability and success rate (if requested)
+        # Stability and success rate
         if calculate_stability:
             print("\n" + "="*60)
             print("Calculating stability metrics (this may take a while)...")
@@ -935,14 +719,26 @@ class StructureEvaluator:
                         'median_e_hull': np.median(e_hull_distances),
                         'std_e_hull': np.std(e_hull_distances)
                     }
+                
+                # Add M3GNet statistics if available
+                e_hull_distances_m3gnet = [e.e_hull_distance_m3gnet for e in valid_evals 
+                                          if not (np.isnan(e.e_hull_distance_m3gnet) or np.isinf(e.e_hull_distance_m3gnet))]
+                if e_hull_distances_m3gnet:
+                    results['stability_stats_m3gnet'] = {
+                        'min_e_hull': min(e_hull_distances_m3gnet),
+                        'max_e_hull': max(e_hull_distances_m3gnet),
+                        'mean_e_hull': np.mean(e_hull_distances_m3gnet),
+                        'median_e_hull': np.median(e_hull_distances_m3gnet),
+                        'std_e_hull': np.std(e_hull_distances_m3gnet)
+                    }
             
             # Add M3GNet metastability to results
             results['m3gnet_metastability'] = success_metrics['m3gnet_metastability']
 
             # Compute composition/structural novelty, overall novelty, and SUN rate
             novelty = self.calculate_novelty(structures)
-            overall_novelty_result = self.calculate_overall_novelty(structures)  # No stability requirement
-            sun_result = self.calculate_sun(structures, evaluations=evaluations)  # With stability requirement (E-hull < 0.0)
+            overall_novelty_result = self.calculate_overall_novelty(structures)
+            sun_result = self.calculate_sun(structures, evaluations=evaluations)
             results['overall_novelty'] = overall_novelty_result['overall_novelty']
             results['novelty'] = {
                 'sun_score': sun_result['sun_score'],
@@ -960,12 +756,11 @@ class StructureEvaluator:
                 'total_structures': len(structures)
             }
 
-            # Without stability, compute overall novelty only (SUN requires stability)
             novelty = self.calculate_novelty(structures)
-            overall_novelty_result = self.calculate_overall_novelty(structures)  # No stability requirement
+            overall_novelty_result = self.calculate_overall_novelty(structures)
             results['overall_novelty'] = overall_novelty_result['overall_novelty']
             results['novelty'] = {
-                'sun_score': 0.0,  # Cannot calculate SUN without stability
+                'sun_score': 0.0,
                 'both_novel_count': overall_novelty_result['both_novel_count'],
                 'total_structures': overall_novelty_result['total_structures'],
                 'composition_novelty': novelty['composition_novelty'],
@@ -1015,7 +810,6 @@ Examples:
     
     args = parser.parse_args()
     
-    # Load structures
     print("Loading structures...")
     evaluator = StructureEvaluator(
         mlip=args.mlip,
@@ -1050,7 +844,6 @@ Examples:
     output_path = Path(args.output)
     if output_path.suffix == '.json':
         with open(output_path, 'w') as f:
-            # Convert numpy types to native Python types for JSON serialization
             def convert_to_serializable(obj):
                 if isinstance(obj, np.integer):
                     return int(obj)
@@ -1066,7 +859,6 @@ Examples:
             
             json.dump(convert_to_serializable(results), f, indent=2)
     else:
-        # Save as CSV (flatten results)
         flat_results = {}
         for key, value in results.items():
             if isinstance(value, dict):

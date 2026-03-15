@@ -1,4 +1,4 @@
-"""Class for calculating energy to the hull given structures."""
+"""Calculate energy to the hull for crystal structures"""
 
 from __future__ import annotations
 
@@ -15,17 +15,10 @@ from pymatgen.analysis.phase_diagram import PatchedPhaseDiagram
 
 
 class EHullCalculator:
-    """Class for calculating energy to the hull given structures.
+    """Calculate energy to the hull using patched phase diagram"""
     
-    Args:
-        ppd_path: path to patched phase diagram as reference 
-        to calculate E_hull.
-    """
-    def __init__(
-        self, 
-        ppd_path: str
-    ) -> None:
-        """Initialize EHullCalculator with path to patched phase diagram.""" 
+    def __init__(self, ppd_path: str) -> None:
+        """Initialize with path to patched phase diagram""" 
         print("Initialize EHullCalcul with patched phase diagram.")
         self.ppd_mp = self.load_gzip(ppd_path)
         
@@ -37,20 +30,8 @@ class EHullCalculator:
         and energy."""
         return self.get_e_hull(se_list)
         
-    def get_e_hull(
-        self,
-        se_list: List[dict],
-    ) -> List[dict]:
-        """Get energy to the hull from list of dict containing structures
-        and energy.
-        
-        Args:
-            se_list: list of dict containing structures and energies.
-        
-        Returns:
-            seh_list: list of dict containing structures, energies, and 
-            energies to the hull.
-        """
+    def get_e_hull(self, se_list: List[dict]) -> List[dict]:
+        """Get energy to the hull from list of structures and energies"""
         entries = self.build_up_entry(se_list)
         e_hull = self.compute_e_hull(entries, self.ppd_mp)
 
@@ -65,10 +46,8 @@ class EHullCalculator:
         return seh_list
     
     @staticmethod
-    def build_up_entry(
-        se_list: List[dict],
-    ) -> List[ComputedStructureEntry]:
-        """Build up the list of computed structure entries."""    
+    def build_up_entry(se_list: List[dict]) -> List[ComputedStructureEntry]:
+        """Build list of computed structure entries"""    
         entries = []
         for se_dict in se_list:
             structure = se_dict.get('structure')
@@ -78,11 +57,8 @@ class EHullCalculator:
         return entries
     
     @staticmethod
-    def compute_e_hull(
-        entries: List[ComputedStructureEntry],
-        ppd: PatchedPhaseDiagram,
-    )  -> Dict[str, float]:
-        """Compute energy to the hull for each entry."""
+    def compute_e_hull(entries: List[ComputedStructureEntry], ppd: PatchedPhaseDiagram) -> Dict[str, float]:
+        """Compute energy to the hull for each entry"""
         if not isinstance(entries, list):
             raise TypeError(f'entries must be a list, but got {type(entries)}')
         if not isinstance(ppd, PatchedPhaseDiagram):

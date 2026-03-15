@@ -192,24 +192,35 @@ matllmsearch/
 │   ├── utils/
 │   │   ├── structure_generator.py  # LLM-based structure generator
 │   │   ├── stability_calculator.py # Structure stability evaluation
+│   │   ├── materials_oracle.py    # Materials property oracle
 │   │   ├── data_loader.py         # Data loading utilities
 │   │   └── config.py              # Configuration and prompts
-│   └── evaluators/
-│       └── materials_oracle.py    # Materials property oracle
 ├── requirements.txt
 └── README.md
 ```
 
+## Evaluation Measurements
+
+Crystal structure discovery. Each experiment began with an initial population of $100$ groups of parents ($100 \times 2 = 200$ parent structures), seeded from the MatBench-bandgap dataset selected with lowest deformation energy by CHGNet. The mutation and crossover operations for LLMs were implemented by prompting the LLMs with two sampled parent structures based on their fitness values (minimizing $E_\text{d}$) and querying them to propose $5$ new structures either through mutation of one structure or crossover of both structures. After generating new offspring in each generation, we evaluated the new offspring and merged their evaluations with the parent evaluations from the previous iteration. The merged pool of parents and children were then ranked by their fitness values (minimizing $E_\text{d}$), and the top-$100 \times 2$ candidates were kept in the population as the pool for the next iteration. We evaluate generated structures through metrics that assess validity, diversity, novelty, and stability. Structural validity checks three-dimensional periodicity, positive lattice volume, and valid atomic positions. Composition validity verifies positive element counts and reasonable number of elements ($\leq 10$). Structural diversity is computed by deduplicating the generated set using pymatgen's StructureMatcher algorithm, then calculating the ratio of unique structures to total generated. Composition diversity measures the fraction of distinct chemical compositions. For novelty assessment, we compare generated structures against the initial reference pool. Composition novelty identifies structures whose reduced formulas are absent from the reference set. Structural novelty is determined by grouping reference structures by formula, then for each generated structure with a matching formula, using StructureMatcher to check if it matches any reference structure with the same composition; unmatched structures are considered structurally novel. Stability evaluation uses CHGNet to relax structures and compute formation energy, then calculates energy above the convex hull ($E_\text{d}$) via a pre-computed patched phase diagram database. We report metastability rates at three thresholds: $E_\text{d} < 0.0$ eV/atom (thermodynamically stable), $E_\text{d} < 0.03$ eV/atom (highly metastable), and $E_\text{d} < 0.10$ eV/atom (M3GNet metastability criterion). The integrated SUN (Structures Unique and Novel) score combines stability and novelty: (1) filter to structures with $E_\text{d} < 0.0$ eV/atom; (2) identify unique structures within this stable subset using pymatgen's Structure.matches with scaling enabled; (3) check novelty against the reference pool; (4) compute SUN score as the number of structures simultaneously stable, unique, and novel, divided by the total number of generated structures.
+
 ## Results
 
 Comparison of different methods on crystal structure generation:
+**Note:** All LLM models were tested with `temperature: 1.0` and `max_tokens: 8000`.
+
+
+Consider parents and children to form next generation: 
 
 | Method | Structural Validity(%) | Comp Validity(%) | Metastability (E_d < 0.1 eV/atom, %) | Metastability (E_d < 0.0 eV/atom, %) | Sun Rate(%) |
 |--------|---------------------|---------------|-----------------------------------|-----------------------------------|----------|
 | CDVAE | 100 | 86.70 | 28.8 | - | - |
 | DiffCSP | 100 | 83.25 | - | 5.06 | 3.34 |
-| GPT-5-mini | 100 | 100 | 58.17 | 12.19 | 10.08 |
-
+| GPT-5-mini | 100 | 100 | 74.60 | 50.05 | 46.24 |
+| GPT-5-chat | 100 | 100 | 64.36 | 46.93 | 44.37 |
+| GPT-5 | 100 | 100 | 88.33 | 63.22 | 55.31 |
+| Claude Sonnet 4.5 | 100 | 100 | 78.71 | 50.21 | 38.99 |
+| DeepSeek Reasoner | 100 | 100 | 88.90 | 61.22 | 48.25 |
+| Grok-4 | 100 | 100 | 87.13 | 60.29 | 49.80 |
 ## Output
 
 Results are saved in the specified log directory with the following structure:

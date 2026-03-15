@@ -10,9 +10,7 @@ from typing import Dict, Any
 # Add sde_harness to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', '..'))
 
-# from sde_harness.core import Generation, Oracle, Workflow
-# from sde_harness.base import ProjectBase
-from ..evaluators import MaterialsOracle
+from ..utils.materials_oracle import MaterialsOracle
 from ..utils.data_loader import load_seed_structures, matches_composition, matches_unit_cell_pattern
 from ..utils.structure_generator import StructureGenerator
 from pymatgen.core.composition import Composition
@@ -37,8 +35,8 @@ class MatLLMSearchCSP:
         
         # Initialize materials oracle
         self.oracle = MaterialsOracle(
-            opt_goal="e_hull_distance",  # CSP focuses on finding ground state
-            mlip="orb-v3"  # Use more accurate potential for structure prediction
+            opt_goal="e_hull_distance",
+            mlip="orb-v3"
         )
     
     def run(self, **kwargs) -> Dict[str, Any]:
@@ -54,13 +52,13 @@ class MatLLMSearchCSP:
         random.seed(self.args.seed)
         np.random.seed(self.args.seed)
         
-        # Run CSP workflow (similar to CSG but focused on target compound)
+        # Run CSP workflow
         results = self._run_csp_workflow(seed_structures)
         
         return results
     
     def _run_csp_workflow(self, seed_structures):
-        """Run CSP workflow - similar to CSG but focused on target compound"""
+        """Run CSP workflow focused on target compound"""
         from pathlib import Path
         import pandas as pd
         import json
@@ -70,7 +68,12 @@ class MatLLMSearchCSP:
         output_path.mkdir(parents=True, exist_ok=True)
         
         # Initialize population
-        current_population = seed_structures[:self.args.population_size] if seed_structures else []
+        initial_structures = seed_structures[:self.args.population_size * getattr(self.args, 'parent_size', 2)] if seed_structures else []
+        if initial_structures:
+            print(f"Evaluating initial population of {len(initial_structures)} structures...")
+            current_evaluations = self.oracle.evaluate(initial_structures)
+        else:
+            current_evaluations = []
         
         all_generations = []
         all_metrics = []
@@ -78,11 +81,12 @@ class MatLLMSearchCSP:
         for iteration in range(self.args.max_iter):
             print(f"\n=== Iteration {iteration + 1}/{self.args.max_iter} ===")
             
-            # Generate offspring
-            if current_population:
-                print(f"Generating {self.args.reproduction_size} offspring from {len(current_population)} parents")
+            # Generate offspring from current population structures
+            current_population_structures = [e.structure for e in current_evaluations] if current_evaluations else []
+            if current_population_structures:
+                print(f"Generating {self.args.reproduction_size} offspring from {len(current_population_structures)} parents")
                 new_structures = self.structure_generator.generate(
-                    current_population, 
+                    current_population_structures, 
                     num_offspring=self.args.reproduction_size
                 )
             else:
@@ -106,13 +110,27 @@ class MatLLMSearchCSP:
                 print("No structures match target compound, ending optimization")
                 break
             
-            # Evaluate structures
-            print("Evaluating structures...")
-            evaluations = self.oracle.evaluate(filtered_structures)
+            # Evaluate new structures (children)
+            print("Evaluating new structures...")
+            child_evaluations = self.oracle.evaluate(filtered_structures)
             
-            # Save generation data
+            # Filter parent evaluations to ensure they match target compound
+            filtered_parent_evaluations = []
+            for eval in current_evaluations:
+                try:
+                    if eval.structure and (matches_composition(eval.structure.composition, target_comp) or 
+                                          matches_unit_cell_pattern(eval.structure.composition, target_comp)):
+                        filtered_parent_evaluations.append(eval)
+                except Exception:
+                    continue
+            
+            # Merge filtered parent evaluations and child evaluations
+            all_evaluations = filtered_parent_evaluations + child_evaluations
+            print(f"Merged {len(filtered_parent_evaluations)} parent evaluations (filtered) with {len(child_evaluations)} child evaluations")
+            
+            # Save generation data (only for new children)
             generation_data = []
-            for i, (structure, evaluation) in enumerate(zip(filtered_structures, evaluations)):
+            for i, (structure, evaluation) in enumerate(zip(filtered_structures, child_evaluations)):
                 if structure and evaluation:
                     generation_data.append({
                         'Iteration': iteration + 1,
@@ -127,18 +145,20 @@ class MatLLMSearchCSP:
             all_generations.extend(generation_data)
             
             # Calculate metrics
-            metrics = self.oracle.get_metrics(evaluations)
+            metrics = self.oracle.get_metrics(all_evaluations)
             metrics['iteration'] = iteration + 1
             all_metrics.append(metrics)
             
             print(f"Metrics: {metrics}")
             
-            # Update population (select best structures for CSP)
-            valid_evaluations = [e for e in evaluations if e.valid]
+            # Update population (select best structures from parents + children)
+            valid_evaluations = [e for e in all_evaluations if e.valid]
             if valid_evaluations:
                 ranked_evaluations = self.oracle.rank_structures(valid_evaluations, ascending=True)
-                current_population = [e.structure for e in ranked_evaluations[:self.args.population_size]]
-                print(f"Updated population: {len(current_population)} structures")
+                # Keep top population_size * parent_size from merged pool
+                parent_size = getattr(self.args, 'parent_size', 2)
+                current_evaluations = ranked_evaluations[:self.args.population_size * parent_size]
+                print(f"Updated population: {len(current_evaluations)} structures (top {self.args.population_size * parent_size} from {len(valid_evaluations)} valid)")
             else:
                 print("No valid structures found, keeping previous population")
         
@@ -201,7 +221,7 @@ class MatLLMSearchCSP:
             print(f"No exact matches found, using structures with similar element count")
             target_elem_count = len(target_comp.elements)
             
-            for structure in all_seeds[:100]:  # Limit to first 100 for efficiency
+            for structure in all_seeds[:100]:
                 if structure is None:
                     continue
                     
@@ -213,7 +233,7 @@ class MatLLMSearchCSP:
             
             print(f"Found {len(matching_structures)} structures with {target_elem_count} elements")
         
-        return matching_structures[:50]  # Limit to reasonable number
+        return matching_structures[:50]
 
 
 def run_csp(args) -> Dict[str, Any]:

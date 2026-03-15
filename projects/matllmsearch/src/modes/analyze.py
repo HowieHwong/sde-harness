@@ -1,7 +1,8 @@
-"""Analysis mode for evaluating generated structures and computing comprehensive metrics"""
+"""Analysis mode for evaluating generated structures"""
 
 import json
 import sys
+import re
 from pathlib import Path
 from typing import Dict, Any, Optional
 import pandas as pd
@@ -13,25 +14,31 @@ from ..utils.data_loader import load_training_structures_from_cif_csv, load_seed
 from .csg import MatLLMSearchCSG
 
 
+def _extract_model_name(model_path: str) -> str:
+    """
+    Extract a clean model name from a model path for use in directory names.
+    """
+    # Extract the last part after the final slash
+    model_name = model_path.split('/')[-1]
+    model_name = re.sub(r'[^a-zA-Z0-9._-]', '_', model_name)
+    return model_name
+
+
 def run_analyze(args) -> Dict[str, Any]:
-    """
-    Analysis mode: Evaluate generated structures and compute all metrics.
-    
-    Can either:
-    1. Read existing results from CSV file
-    2. Run new evaluation (if input structures provided)
-    
-    Args:
-        args: Command line arguments
-        
-    Returns:
-        Dictionary with evaluation results
-    """
+    """Analysis mode: Evaluate generated structures and compute metrics"""
     print("="*80)
     print("ANALYSIS MODE: Structure Evaluation")
     print("="*80)
     
     generate_via_api = getattr(args, 'generate', False)
+    
+    # Determine output directory based on model name if generating
+    if generate_via_api:
+        # Extract model name for directory structure
+        model_name = _extract_model_name(getattr(args, 'model', 'unknown_model'))
+        args._output_dir_model_name = model_name
+    else:
+        args._output_dir_model_name = None
     
     if generate_via_api:
         # Generate structures using CSG workflow
@@ -48,7 +55,6 @@ def run_analyze(args) -> Dict[str, Any]:
         if hasattr(args, 'input') and args.input:
             input_file = Path(args.input)
         elif hasattr(args, 'results_path') and args.results_path:
-            # Look for generations.csv in results_path
             results_path = Path(args.results_path)
             input_file = results_path / "generations.csv"
             if not input_file.exists():
@@ -85,6 +91,12 @@ def run_analyze(args) -> Dict[str, Any]:
     # Output file
     if hasattr(args, 'output') and args.output:
         output_file = Path(args.output)
+    elif generate_via_api and hasattr(args, '_output_dir_model_name') and args._output_dir_model_name:
+        # Save to the same directory as the CSG generation results (logs/model_name)
+        log_dir = getattr(args, 'log_dir', 'logs')
+        model_name = args._output_dir_model_name
+        output_path = Path(log_dir) / model_name
+        output_file = output_path / "evaluated_results.json"
     elif hasattr(args, 'results_path') and args.results_path:
         # save to results_path
         results_path = Path(args.results_path)
@@ -111,7 +123,6 @@ def run_analyze(args) -> Dict[str, Any]:
         else:
             training_structures = evaluator.load_structures_from_file(str(training_file), fmt='json')
     else:
-        # Fallback to reference pool (seed structures) from data_path
         data_path = getattr(args, 'data_path', 'data/band_gap_processed_5000.csv')
         print(f"Loading novelty reference structures from reference pool: {data_path}...")
         try:
@@ -139,19 +150,13 @@ def run_analyze(args) -> Dict[str, Any]:
         print(f"Loaded {len(training_structures)} novelty reference structures")
     else:
         print("No novelty reference structures available - SUN score calculation will be limited")
-    
-    # Limit structures if requested (for faster testing)
-    if hasattr(args, 'limit') and args.limit and args.limit > 0:
-        if len(structures) > args.limit:
-            print(f"Limiting to first {args.limit} structures for faster evaluation")
-            structures = structures[:args.limit]
+
     
     # Evaluate structures
     print("\n" + "="*80)
     print("Starting evaluation...")
     print("="*80)
     
-    # Always calculate stability
     results = evaluator.evaluate(structures, calculate_stability=True)
     
     # Save results
@@ -160,7 +165,6 @@ def run_analyze(args) -> Dict[str, Any]:
     
     with open(output_file, 'w') as f:
         def convert_to_serializable(obj):
-            """Convert numpy types and other non-serializable objects to native Python types"""
             if isinstance(obj, (int, float, str, bool, type(None))):
                 return obj
             elif isinstance(obj, dict):
@@ -269,23 +273,9 @@ def print_summary(results: Dict[str, Any]):
 
 
 def _generate_structures_via_csg(args) -> list:
-    """
-    Generate structures using the CSG workflow (MatLLMSearchCSG).
+    """Generate structures using the CSG workflow"""
     
-    This uses the existing CSG implementation which properly uses StructureGenerator
-    and the evolutionary workflow.
-    
-    Args:
-        args: Command line arguments with generation parameters
-        
-    Returns:
-        List of generated structures
-    """
-    # Set up CSG args - ensure required attributes are set
-    # Set defaults for CSG-specific args if not provided
-    # Note: population_size controls per-iteration generation, not total limit
     if not hasattr(args, 'population_size') or args.population_size is None:
-        # Use a reasonable default for population size (will generate more structures across iterations)
         args.population_size = 10
     
     if not hasattr(args, 'reproduction_size'):
@@ -304,15 +294,18 @@ def _generate_structures_via_csg(args) -> list:
         args.log_dir = 'logs'
     
     if not hasattr(args, 'save_label'):
-        args.save_label = 'analyze_generation'
+        if hasattr(args, 'model') and args.model:
+            args.save_label = _extract_model_name(args.model)
+        else:
+            args.save_label = 'analyze_generation'
     
     # Initialize and run CSG workflow
     csg_project = MatLLMSearchCSG(args=args)
     csg_results = csg_project.run()
     
     # Extract structures from CSG results
-    # CSG saves results to generations.csv in the output path
-    output_path = Path(csg_results.get('output_path', 'logs/analyze_generation'))
+    default_output = Path(args.log_dir) / args.save_label
+    output_path = Path(csg_results.get('output_path', str(default_output)))
     generations_file = output_path / "generations.csv"
     
     structures = []
@@ -335,9 +328,7 @@ def _generate_structures_via_csg(args) -> list:
         print(f"Warning: Generations file not found at {generations_file}")
         return []
     
-    # Deduplicate structures after all iterations
-    # Note: CSG workflow saves all structures from all iterations without deduplication,
-    # so we need to deduplicate here before evaluation
+    # Deduplicate structures
     print(f"\nDeduplicating {len(structures)} structures...")
     structures = _deduplicate_structures(structures)
     print(f"After deduplication: {len(structures)} unique structures")
@@ -346,15 +337,7 @@ def _generate_structures_via_csg(args) -> list:
 
 
 def _deduplicate_structures(structures: list) -> list:
-    """
-    Deduplicate structures using StructureMatcher.
-    
-    Args:
-        structures: List of structures to deduplicate
-        
-    Returns:
-        List of unique structures
-    """
+    """Deduplicate structures using StructureMatcher"""
     from pymatgen.analysis.structure_matcher import StructureMatcher
     
     if not structures:
