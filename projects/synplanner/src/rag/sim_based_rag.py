@@ -63,7 +63,7 @@ def do_one(
 ) -> Tuple[List[Tuple[str, float]], dict]:
     """Find similar reaction templates for a product molecule using fingerprint similarity."""
     rct = rdchiralReactants(product_smiles)
-    fp = MORGAN_FP_GENERATOR(Chem.MolFromSmiles(product_smiles))
+    fp = MORGAN_FP_GENERATOR(product_smiles)
     
     sims = SIMILARITY_METRIC(fp, [fp_ for fp_ in datasub["prod_fp"]])
     js = np.argsort(sims)[::-1]
@@ -78,7 +78,7 @@ def do_one(
             (rxn, template, rcts_ref_fp) = jx_cache[jx]
         else:
             template = "(" + process_an_example(datasub["rxn_smiles"][jx], super_general=True).replace(">>", ")>>")
-            rcts_ref_fp = MORGAN_FP_GENERATOR(Chem.MolFromSmiles(datasub["rxn_smiles"][jx].split(">")[0]))
+            rcts_ref_fp = MORGAN_FP_GENERATOR(datasub["rxn_smiles"][jx].split(">")[0])
             rxn = rdchiralReaction(template)
             jx_cache[jx] = (rxn, template, rcts_ref_fp)
             
@@ -88,7 +88,7 @@ def do_one(
             outcomes = []
             
         for precursors in outcomes:
-            precursors_fp = MORGAN_FP_GENERATOR(Chem.MolFromSmiles(precursors))
+            precursors_fp = MORGAN_FP_GENERATOR(precursors)
             precursors_sim = SIMILARITY_METRIC(precursors_fp, [rcts_ref_fp])[0]
 
             if template in probs:

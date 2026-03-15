@@ -1,5 +1,5 @@
 from typing import List, Dict, Tuple, Any
-import copy
+from copy import deepcopy
 import ast
 from itertools import permutations
 import numpy as np
@@ -33,7 +33,8 @@ def check_availability(
     unavailable_list = []
     for smi in smi_list:
         signal = inventory.is_purchasable(Molecule(smi))
-        if not signal: unavailable_list.append(smi)
+        if not signal: 
+            unavailable_list.append(smi)
     
     return unavailable_list
 
@@ -125,9 +126,9 @@ def preprocess_reaction_dict(reaction_dict: Dict[str, str]) -> Dict[str, Tuple[L
     return preprocessed_dict
 
 def process_reaction_routes(route: List[str]) -> List[Dict[str, str]]:
-    """Process reaction routes into structured format for LLM prompt."""
+    """Process reaction routes into a structured format for LLM prompt."""
     json_list = []
-    for idx,i in enumerate(route):
+    for idx, i in enumerate(route):
         products, reactants = i.split(">>")
         reaction = i
         reactants_list = reactants.split(".")
@@ -142,10 +143,12 @@ def process_reaction_routes(route: List[str]) -> List[Dict[str, str]]:
             }
             json_list.append(step)
         else:
-            original_set = copy.deepcopy(ast.literal_eval(json_list[idx-1]["Updated molecule set"]))
-            update_set = copy.deepcopy(ast.literal_eval(json_list[idx-1]["Updated molecule set"]))
-            try: update_set.remove(products)
-            except Exception: pass
+            original_set = deepcopy(ast.literal_eval(json_list[idx-1]["Updated molecule set"]))
+            update_set = deepcopy(ast.literal_eval(json_list[idx-1]["Updated molecule set"]))
+            try: 
+                update_set.remove(products)
+            except Exception: 
+                pass
             update_set = update_set + reactants_list
             step = {
                 "Molecule set": str(original_set),
@@ -169,7 +172,7 @@ def retrieve_routes(
     sim_score = SIMILARITY_METRIC(fp, [fp_ for fp_ in all_fps])
 
     rag_tuples = list(zip(sim_score, route_list))
-    rag_tuples = sorted(rag_tuples, key=lambda x: x[0], reverse=True)[:50]
+    rag_tuples = sorted(rag_tuples, key=lambda x: x[0], reverse=True)
     sims_list, route_list = zip(*rag_tuples)
 
     sum_scores = sum(sims_list)
@@ -340,8 +343,10 @@ def redundant_reaction(
     for idx, smi in enumerate(smi_list):
         if smi in reaction_cache:
             smi_description = "For molecule {}, these reactions have been tried previously:\n".format(smi)
-            for reaction in reaction_cache[smi]: smi_description += reaction + "\n" 
-            text += smi_description + "Please do not use them again.\n"
+            for reaction in reaction_cache[smi]: 
+                smi_description += reaction + "\n" 
+            text += smi_description
+            text += "Please do not use them again.\n"
     return text
 
 def run_retro(
@@ -362,7 +367,7 @@ def run_retro(
 
     return [output.split(".") for output in outputs]
 
-def smiles_to_reaction(smiles: str) -> Any:
+def smiles_to_reaction(smiles: str):
     """Convert SMILES string to RDKit reaction object."""
     try:
         reactants, products = smiles.split(">>")
@@ -386,7 +391,9 @@ def check_and_update_routes(
     for i in range(1, len(routes)):
         current_updated_set = ast.literal_eval(routes[i]["Molecule set"])
         previous_molecule_set = ast.literal_eval(routes[i - 1]["Updated molecule set"])
-        if set(current_updated_set) != set(previous_molecule_set): routes[i]["Molecule set"] = str(previous_molecule_set)
+        
+        if set(current_updated_set) != set(previous_molecule_set): 
+            routes[i]["Molecule set"] = str(previous_molecule_set)
 
     return routes
 
@@ -412,13 +419,13 @@ def get_feedback(
     evaluation: Dict[str, Any],
     inventory: SmilesListInventory
 ) -> Tuple[str, str]:
-    original_set = copy.deepcopy(molecule_set)
-    update_set = copy.deepcopy(original_set)
+    original_set = deepcopy(molecule_set)
+    update_set = deepcopy(original_set)
 
     try: update_set.remove(evaluation["product"][0])
     except Exception: update_set = []
     
-    update_set += evaluation["reactants"]
+    update_set = update_set + evaluation["reactants"]
     reaction = evaluation["reaction"]
     step = [{
             "Molecule set": str(molecule_set),
@@ -430,13 +437,23 @@ def get_feedback(
     
     # Feedbacks
     feedback = """\n"""
-    if evaluation["reaction_existence"] == False: feedback += reaction_unavailable_feedback(evaluation)                    
-    if len(evaluation["invalid_updated_mol_id"]) != 0: feedback += molecule_invalid_feedback(evaluation)
-    if (evaluation["reaction_existence"] == True) and (evaluation["reaction_valid"] == False): feedback += reaction_cannot_happen_feedback(evaluation)
-    if (evaluation["reaction_existence"] == True) and (evaluation["reaction_valid"] == True) and (evaluation["updated_set_valid"] == False): feedback += updated_set_mismatch_feedback(evaluation)
-    if (evaluation["check_availability"] == True) and (len(evaluation["unavailable_mol_id"]) != 0) and (len(evaluation["invalid_updated_mol_id"]) == 0): feedback += molecule_unavailable_feedback(evaluation, inventory)
+    if evaluation["reaction_existence"] == False: 
+        feedback += reaction_unavailable_feedback(evaluation)        
 
-    if feedback == """\n""": feedback = "The provided route is valid. Please try to propose a new synthetic route for this target molecule."
+    if len(evaluation["invalid_updated_mol_id"]) != 0: 
+        feedback += molecule_invalid_feedback(evaluation)
+
+    if (evaluation["reaction_existence"] == True) and (evaluation["reaction_valid"] == False): 
+        feedback += reaction_cannot_happen_feedback(evaluation)
+
+    if (evaluation["reaction_existence"] == True) and (evaluation["reaction_valid"] == True) and (evaluation["updated_set_valid"] == False): 
+        feedback += updated_set_mismatch_feedback(evaluation)
+        
+    if (evaluation["check_availability"] == True) and (len(evaluation["unavailable_mol_id"]) != 0) and (len(evaluation["invalid_updated_mol_id"]) == 0): 
+        feedback += molecule_unavailable_feedback(evaluation, inventory)
+
+    if feedback == """\n""": 
+        feedback = "The provided route is valid. Please try to propose a new synthetic route for this target molecule."
 
     # Return the feedback and the step
     return str(step), feedback
@@ -453,7 +470,7 @@ def molecule_invalid_feedback(evaluation: Dict[str, Any]) -> str:
     invalid_molecule_id = evaluation["invalid_updated_mol_id"]
     updated_molecule_set = evaluation["updated_molecule_set"]
 
-    fb = """\nIn the 'Updated molecule set',"""
+    fb = """\nIn the "Updated molecule set","""
 
     for i in range(len(invalid_molecule_id)):
         fb = fb + """
@@ -472,11 +489,9 @@ def reaction_cannot_happen_feedback(evaluation: Dict[str, Any]) -> str:
 
 def updated_set_mismatch_feedback(evaluation: Dict[str, Any]) -> str:
     """Generate feedback when molecule sets are not aligned."""
-    reaction = evaluation["reaction"]
-    product = evaluation["product"][0]
 
     fb = """\nThe molecule set and the updated molecule set are not aligned. In each step, you need to keep a molecule set in which are the molecules we need. After taking the backward reaction in this step, you need to remove the products from the molecule set and add the reactants to the molecule set and then store
-this set as 'Updated molecule set' in this step. In the last step, all the molecules in the 'Updated molecule set' should be purchasable. Please also check whether the product of this reaction is in the molecule set."""
+this set as "Updated molecule set" in this step. In the last step, all the molecules in the "Updated molecule set" should be purchasable. Please also check whether the product of this reaction is in the molecule set."""
 
     return fb
 
@@ -490,7 +505,7 @@ def molecule_unavailable_feedback(
         smi_list=updated_molecule_set,
         inventory=inventory
     )
-    fb = """\nIn the 'Updated molecule set', the molecule {} cannot be purchased from the market.\n""".format(str(non_purchasable_molecule))
+    fb = """\nIn the "Updated molecule set", the molecule {} cannot be purchased from the market.\n""".format(str(non_purchasable_molecule))
     return fb
 
 
