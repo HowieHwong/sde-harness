@@ -28,12 +28,17 @@ MODEL_ALIASES = {
     "gpt-5-mini": "gpt-5-mini",
     "gpt5mini": "gpt-5-mini",
     "gpt": "gpt",
+    "deepseek-reasoner": "deepseek",
+    "claude-sonnet-4-5": "claude-sonnet-4-5",
+    "gpt-5": "gpt-5",
+    "grok-4": "grok-4",
+    "gpt-5-chat-latest": "gpt-5-chat-latest",
 }
 
 TASK_ALIASES = {
     "single": "single",
-    "multi": "multi",
-    "multisite": "multi",
+    # "multi": "multi",
+    # "multisite": "multi",
     "unspecified": "unspecified",
 }
 
@@ -143,7 +148,7 @@ def load_file(path: str, higher_is_better: bool) -> Dict:
 
     parsed = parse_filename(path)
     best_score, best_seq = extract_best_score(payload, higher_is_better)
-
+    
     # History
     hist = payload.get("best_scores_history", [])
     history_len = len(hist)
@@ -225,16 +230,26 @@ def main():
     def _family(m: Any) -> str:
         m = (m or "")
         m = str(m).lower()
-        if m.startswith("gpt"):
-            return "GPT"
+        if m.startswith("gpt-5-mini"):
+            return "GPT5-mini"
+        if m.startswith("deepseek"):
+            return "DeepSeek"
         if m == "baseline":
             return "Baseline"
+        if m == "claude-sonnet-4-5":
+            return "Claude-Sonnet-4-5"
+        if m == "gpt-5":
+            return "GPT-5"
+        if m == "grok-4":
+            return "Grok-4"
+        if m == "gpt-5-chat-latest":
+            return "GPT-5-chat-latest"
         return "Other"
 
     df["family"] = df["model"].apply(_family)
 
     # Keep only Baseline and GPT rows
-    df = df[df["family"].isin(["Baseline", "GPT"])].copy()
+    df = df[df["family"].isin(["Baseline", "GPT5-mini", "DeepSeek", "Claude-Sonnet-4-5", "GPT-5", "GPT-5-chat-latest"])].copy()
     if df.empty:
         print("No Baseline/GPT records found in parsed files.")
         return
@@ -255,7 +270,7 @@ def main():
     )
 
     # Order rows: Baseline first, then GPT
-    order = pd.CategoricalDtype(categories=["Baseline", "GPT"], ordered=True)
+    order = pd.CategoricalDtype(categories=["Baseline", "GPT5-mini", "DeepSeek", "Claude-Sonnet-4-5", "GPT-5", "GPT-5-chat-latest"], ordered=True)
     agg["family"] = agg["family"].astype(order)
     agg = agg.sort_values("family")
 

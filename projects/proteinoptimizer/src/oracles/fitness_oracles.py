@@ -36,7 +36,13 @@ class FitnessOracle(ProteinOracle):
         
         self.score_max = self.data['fitness'].max()
         self.score_min = self.data['fitness'].min()
-
+        self.wildtype_sequence = self.data.iloc[0]["Combo"]
+        if self.name.lower() == "gb1":
+            self.wildtype_sequence = "VDGV"
+        elif self.name.lower() == "trpb":
+            self.wildtype_sequence = "VFVS"
+        elif self.name.lower() == "syn-3bfo":
+            self.wildtype_sequence = "SKLQICVEPTSQKLMPGSTLVLQCVAVGSPIPHYQWFKNELPLTHETKKLYMVPYVDLEHQGTYWCHVYNDRDSQDSKKVEIIID"
         self._potts_landscape: PottsModel | None = None
         # print(potts_model_path, data_path)
         if potts_model_path and os.path.exists(potts_model_path):

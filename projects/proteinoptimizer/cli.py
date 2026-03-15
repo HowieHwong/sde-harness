@@ -81,6 +81,11 @@ Example usage:
         default="results",
         help="Output directory for results (default: results)"
     )
+    
+    common_args.add_argument("--resume-results", type=str, default=None,
+                        help="Path to a previous run's results JSON to continue from.")
+    common_args.add_argument("--continue-generations", type=int, default=None,
+                        help="If --resume-results is given, how many *additional* generations to run.")
 
     # Oracle choices
     oracle_choices = ['syn-3bfo', 'gb1', 'trpb', 'aav', 'gfp']

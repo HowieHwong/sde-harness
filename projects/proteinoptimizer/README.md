@@ -63,10 +63,10 @@ The final score is a weighted sum: `(fitness_weight * Fitness) + (hamming_weight
 
 ```bash
 # Weighted-sum multi-objective with GB1
-python cli.py multi --oracle gb1 --generations 10 --fitness-weight 1.0 --hamming-weight -0.2 --model "openai/gpt-4o-2024-08-06"
+python cli.py multi --oracle gb1 --generations 10 --fitness-weight 1.0 --hamming-weight -0.2 --model "openai/gpt-5"
 
 # Weighted-sum multi-objective with Syn-3bfo (will use Potts model automatically)
-python cli.py multi --oracle syn-3bfo --generations 10 --fitness-weight 1.0 --hamming-weight -0.2 --model "openai/gpt-4o-2024-08-06"
+python cli.py multi --oracle syn-3bfo --generations 10 --fitness-weight 1.0 --hamming-weight -0.2 --model "openai/gpt-5"
 ```
 
 ### 3. Multi-objective (Pareto)
@@ -75,12 +75,12 @@ This mode doesn't use weights. Instead, it finds the set of "non-dominated" solu
 
 ```bash
 # Pareto front with TrpB
-python cli.py multi-pareto --oracle trpb --generations 20 --model "openai/gpt-4o-2024-08-06"
+python cli.py multi-pareto --oracle trpb --generations 20 --model "openai/gpt-5"
 ```
 
 ### 4. SDE-Harness Workflow
 ```bash
-python cli.py workflow --generations 3 --model "openai/gpt-4o-2024-08-06" --oracle gb1 --model "openai/gpt-4o-2024-08-06"
+python cli.py workflow --generations 3 --model "openai/gpt-5" --oracle gb1
 ```
 
 Logs & artefacts can be inspected in the Weave UI under
@@ -96,36 +96,34 @@ This scripts will run all the model on all the datasets. Please edit as needed.
 ```bash
 python src/analyze.py --glob "./results/*.json" --higher-is-better 1 
 ```
-This will ouput a table contains result summary.
+This will output a table containing result summary.
+
+### 7. Visualization
+Generate publication-quality plots from result JSON files:
+```bash
+python src/plot.py --input_dir ./results --out_dir ./figures
+```
+
+Optional arguments:
+- `--title_prefix`: Add a prefix to plot titles (e.g., `--title_prefix "Experiment 1"`)
+
+This script generates three figures:
+1. **ProteinOptimizerResult.png/pdf**: Bar plot of final Top 1 performance per model, averaged across all tasks
+2. **PO_top1_convergence.png/pdf**: Convergence plot showing Top 1 score vs iteration for each model
+3. **PO_top1_by_task_grouped.png/pdf**: Grouped bar plot showing Top 1 performance by task for each model
+
+The script expects JSON files with names matching the pattern `results_single_<task>_0_<model>.json` in the input directory.
 
 ## Results
-| Model     |   Top_1 |   Top_5 |   Top_10 |
-|:----------|--------:|--------:|---------:|
-| Baseline  |  0.4927 |  0.4404 |   0.4133 |
-| GPT-5-mini|  0.5149 |  0.4692 |   0.4384 |
-
+| Model             |   Top_1  |
+|:------------------|---------:|
+| Baseline          |   0.7514 |
+| GPT5-mini         |   0.7867 |
+| DeepSeek          |   0.8713 |
+| Claude-Sonnet-4-5 |   0.7759 |
+| GPT-5             |   0.8561 |
+| GPT-5-chat-latest |   0.8582 |
 ---
-## Code overview
-```
-proteinoptimizer/
-├─ cli.py                     # command-line entry point
-├─ data/                      # Syn-3bfo dataset (see above)
-├─ src/
-│  ├─ core/
-│  │  ├─ protein_optimizer.py # GA for sequences
-│  │  ├─ multiobjective.py    # weighted-sum oracle wrapper
-│  │  ├─ pareto.py            # non-dominated sort helpers
-│  │  └─ pareto_optimizer.py  # simplified NSGA-II GA
-│  ├─ utils/
-│  │  └─ potts_model.py       # local copy of Google DCA Potts landscape
-│  ├─ oracles/
-│  │  └─ protein_oracles.py   # Syn-3bfo oracle (CSV / Potts)
-│  └─ modes/
-│     ├─ single_objective.py
-│     ├─ multi_objective_protein.py
-│     └─ multi_pareto_protein.py
-└─ tests/ (legacy molecule tests kept for reference, ignored)
-```
 
 ---
 ## Extending to other protein datasets
