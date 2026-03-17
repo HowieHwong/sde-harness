@@ -8,10 +8,9 @@ This benchmark tests an LLM's ability to discover the best-fitting spectral mode
 
 ### Key Features
 
-- **Evolutionary Search (4→2)**: Each generation, the LLM proposes 4 model hypotheses. The top 2 (by C-statistic) survive to the next round.
-- **Sherpa Oracle**: Uses the Sherpa X-ray fitting package to evaluate model quality via C-statistic.
+- **Evolutionary Search (4→2)**: Each generation, the LLM proposes 4 model hypotheses. The top 2 (by BIC) are kept for the next round.
+- **Sherpa Oracle**: Uses the Sherpa X-ray fitting package to evaluate model quality via C-statistic and BIC.
 - **XSPEC Models**: Supports standard XSPEC models (tbabs, powerlaw, bbody, bremss, apec, diskbb, comptt).
-- **Convergence Detection**: Stops early if the best model is unchanged for N consecutive generations.
 
 ## Requirements
 
@@ -93,11 +92,11 @@ python -c "from sherpa.astro import ui; ui.set_xsxsect('vern'); print('Sherpa+XS
 # Basic run with GPT-4o
 python cli.py fit --pha data/spectra/lmc_flare/flaresp_grp1.pha -v
 
-# With custom settings
+# With custom settings (e.g. more hypotheses per round)
 python cli.py fit --pha data/spectra/lmc_flare/flaresp_grp1.pha \
     --model gpt-4o \
-    --population-size 3 \
-    --offspring-size 6 \
+    --population-size 2 \
+    --offspring-size 4 \
     --generations 15 \
     -v
 
@@ -116,11 +115,10 @@ python cli.py list
 | Option | Default | Description |
 |--------|---------|-------------|
 | `--pha` | (required) | Path to PHA spectrum file |
-| `--model` | gpt-4o | LLM model to use |
+| `--model` | openai/gpt-4o-2024-08-06 | LLM model to use (key from config/models.yaml) |
 | `--population-size` | 2 | Number of best models to keep each generation |
 | `--offspring-size` | 4 | Number of hypotheses to generate per generation |
 | `--generations` | 10 | Maximum number of generations |
-| `--convergence` | 3 | Stop if best model unchanged for N generations |
 | `--emin` | 0.3 | Minimum energy in keV |
 | `--emax` | 7.0 | Maximum energy in keV |
 | `--seed` | 0 | Random seed(s) for reproducibility |
@@ -133,14 +131,13 @@ python cli.py list
 2. **Oracle Evaluation**: Each model is fitted using Sherpa, returning C-statistic and best-fit parameters
 3. **Selection**: Top M models (by reduced C-stat) survive to the next generation
 4. **Iteration**: LLM sees the surviving models' fit results and proposes new hypotheses
-5. **Convergence**: Process repeats until max generations or convergence (best model unchanged for K rounds)
+5. **Termination**: Process runs for `--generations` rounds (no early stopping)
 
 ## Evaluation Metrics
 
-- `generations`: Number of generations until convergence
+- `generations`: Number of generations run
 - `oracle_calls`: Total Sherpa fit evaluations
-- `converged`: Whether optimization converged successfully
-- `found_correct_model`: Whether the expected model type was found
+- `found_expected_model`: Whether the expected model type was found
 - `best_reduced_cstat`: Final fit quality (closer to 1.0 is better)
 
 ## Project Structure
@@ -186,8 +183,8 @@ OPTIMIZATION COMPLETE
 ============================================================
 Best model: xstbabs.abs1 * xsbbody.bb1
 Best C-stat: 0.9582
-Total generations: 4
-Total oracle calls: 16
+Total generations: 10
+Total oracle calls: 40
 ```
 
 ## Scientific Background

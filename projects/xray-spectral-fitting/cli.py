@@ -11,6 +11,7 @@ Example usage:
 """
 
 import argparse
+import csv
 import json
 import os
 import sys
@@ -24,6 +25,107 @@ sys.path.insert(0, project_root)
 from src.oracle import SherpaOracle
 from src.core import SpectralFitOptimizer
 from src.evaluator import evaluate_results, load_spectrum_metadata
+
+
+# ---- helpers ------------------------------------------------------------
+
+def _build_summary_text(results, metrics, ground_truth):
+    """Build human-readable summary lines for writing to _summary.txt."""
+    lines = []
+    all_results = results.get("all_results", {})
+    best_result = results.get("best_result", {})
+    best_reasoning = results.get("best_reasoning", "")
+
+    lines.append("--- Model Fit Ranking (by BIC) ---")
+    ranked = []
+    for cache_key, res in all_results.items():
+        if res.get("success"):
+            model_str = res.get("model_str", cache_key.split("|")[0])
+            ranked.append((model_str, res.get("bic", float("inf")), res["reduced_cstat"], res.get("n_free_params", 0)))
+    ranked.sort(key=lambda x: x[1])
+    for i, (model, bic, rcstat, n_params) in enumerate(ranked, 1):
+        lines.append("  {rank}. {model}".format(rank=i, model=model))
+        lines.append("      BIC={bic:.2f}  reduced_cstat={rcstat:.4f}  params={n}".format(bic=bic, rcstat=rcstat, n=n_params))
+    failed = [(k, r) for k, r in all_results.items() if not r.get("success")]
+    if failed:
+        lines.append("")
+        lines.append("  Failed models:")
+        for cache_key, res in failed:
+            model_str = res.get("model_str", cache_key.split("|")[0])
+            lines.append("    - {m}: {e}".format(m=model_str, e=str(res.get("error", ""))[:60]))
+
+    lines.append("")
+    lines.append("--- Best Fit Results ---")
+    lines.append("  Model: {m}".format(m=metrics.get("best_model", "N/A")))
+    if best_reasoning:
+        lines.append("  Reasoning: {r}".format(r=best_reasoning))
+    if best_result and best_result.get("success"):
+        lines.append("  C-stat: {c}  DOF: {d}  Reduced C-stat: {r:.4f}".format(
+            c=best_result.get("cstat"), d=best_result.get("dof"), r=best_result.get("reduced_cstat", 0)))
+        lines.append("  BIC: {bic:.2f}  (free params: {k})".format(
+            bic=best_result.get("bic", 0), k=best_result.get("n_free_params", 0)))
+        fitted_params = best_result.get("params", {})
+        for pname, pval in fitted_params.items():
+            lines.append("    {n}: {v:.6f}".format(n=pname, v=pval))
+
+    if ground_truth:
+        lines.append("")
+        lines.append("--- Ground Truth Comparison ---")
+        lines.append("  Expected model: {exp}".format(exp=ground_truth.get("expected_model_sherpa", "N/A")))
+        lines.append("  Found model:    {found}".format(found=metrics.get("best_model", "N/A")))
+        lines.append("  Model STATUS: {s}".format(s="MATCH" if metrics.get("found_expected_model") else "MISMATCH"))
+        fitted_params = best_result.get("params", {}) if best_result else {}
+        kt_val = None
+        for pname, pval in fitted_params.items():
+            if pname.lower().endswith(".kt"):
+                kt_val = pval
+                break
+        lines.append("")
+        lines.append("--- Key Parameter Checks ---")
+        if kt_val is not None:
+            lines.append("  kT = {:.3f} keV  (range 1.80-1.90: {})".format(kt_val, "CORRECT" if 1.80 <= kt_val <= 1.90 else "INCORRECT"))
+        lines.append("")
+        lines.append("--- Source Classification ---")
+        lines.append("  LLM classification: {c}".format(c=metrics.get("llm_classification", "N/A")))
+        lines.append("  Expected:           {e}".format(e=ground_truth.get("expected_classification", "N/A")))
+        lines.append("  STATUS: {s}".format(s="MATCH" if metrics.get("classification_correct") else "MISMATCH"))
+
+    lines.append("")
+    lines.append("=" * 50)
+    lines.append("FINAL BENCHMARK RESULTS")
+    lines.append("=" * 50)
+    lines.append("  Best model: {m}".format(m=metrics.get("best_model", "N/A")))
+    if best_reasoning:
+        lines.append("  LLM reasoning: {r}".format(r=best_reasoning))
+    fitted_params = best_result.get("params", {}) if best_result else {}
+    if fitted_params:
+        kt_found = next((pval for pname, pval in fitted_params.items() if pname.lower().endswith(".kt")), None)
+        if kt_found is not None:
+            lines.append("  Fitted kT: {:.3f} keV".format(kt_found))
+    good_fit = metrics.get("cstat_vs_optimal", 1.0) <= 0.05
+    correct_model = metrics.get("found_expected_model", False)
+    correct_kt = metrics.get("kt_correct", False)
+    correct_classification = metrics.get("classification_correct", False)
+    results_achieved = sum([good_fit, correct_model, correct_kt, correct_classification])
+    best_rcstat = best_result.get("reduced_cstat", 0) if best_result else 0
+    best_bic = best_result.get("bic", 0) if best_result else 0
+    lines.append("")
+    lines.append("  [{}] Good fit (|reduced_cstat - 1| <= 0.05): rcstat={:.3f}, BIC={:.1f}".format(
+        "PASS" if good_fit else "FAIL", best_rcstat, best_bic))
+    lines.append("  [{}] Correct model expression: {}".format(
+        "PASS" if correct_model else "FAIL", metrics.get("best_model", "N/A")))
+    p_label = "Correct kT (1.80-1.90 keV)" if metrics.get("kt_value") else "Correct Gamma (0.4-0.6)"
+    p_value = "{:.3f} keV".format(metrics["kt_value"]) if metrics.get("kt_value") else ("{:.3f}".format(metrics["gamma_value"]) if metrics.get("gamma_value") else "N/A")
+    lines.append("  [{}] {}: {}".format("PASS" if correct_kt else "FAIL", p_label, p_value))
+    lines.append("  [{}] Correct source classification: {}".format(
+        "PASS" if correct_classification else "FAIL",
+        metrics.get("llm_classification", "N/A")))
+    lines.append("-" * 50)
+    lines.append("  SCORE: {}/4 criteria met".format(results_achieved))
+    lines.append("  STATUS: {s}".format(
+        s="SUCCESS" if results_achieved == 4 else ("PARTIAL SUCCESS" if results_achieved >= 2 else "FAILED")))
+    lines.append("=" * 50)
+    return lines
 
 
 # ---- subcommands --------------------------------------------------------
@@ -61,7 +163,6 @@ def cmd_fit(args: argparse.Namespace) -> int:
 
         results = optimizer.optimize(
             max_generations=args.generations,
-            convergence_rounds=args.convergence,
             verbose=args.verbose,
         )
 
@@ -137,7 +238,7 @@ def cmd_fit(args: argparse.Namespace) -> int:
 
                 # Key parameter checks (kT for thermal, PhoIndex/Gamma for powerlaw)
                 fitted_params = best_result.get("params", {}) if best_result else {}
-                
+
                 print("\n--- Key Parameter Checks ---")
                 # Check for kT (thermal models)
                 kt_val = None
@@ -145,30 +246,31 @@ def cmd_fit(args: argparse.Namespace) -> int:
                     if pname.lower().endswith(".kt"):
                         kt_val = pval
                         metrics["kt_value"] = kt_val
-                        print("  kT = {:.3f} keV  (ground truth: 1.85 keV, range: 1.75-1.95)".format(kt_val))
-                        if 1.75 <= kt_val <= 1.95:
+                        print("  kT = {:.3f} keV  (ground truth: 1.85 keV, range: 1.80-1.90)".format(kt_val))
+                        if 1.80 <= kt_val <= 1.90:
                             print("    RESULT: CORRECT")
                             metrics["kt_correct"] = True
                         else:
                             print("    RESULT: INCORRECT")
                             metrics["kt_correct"] = False
                         break
-                
+
                 # Check for PhoIndex/Gamma (powerlaw models)
                 gamma_val = None
                 for pname, pval in fitted_params.items():
                     pname_lower = pname.lower()
                     if "phoindex" in pname_lower or "gamma" in pname_lower:
                         gamma_val = pval
-                        print("  Gamma/PhoIndex = {:.3f}  (ground truth: ~0.5, range: 0.2-0.8)".format(gamma_val))
-                        if 0.2 <= gamma_val <= 0.8:
+                        print("  Gamma/PhoIndex = {:.3f}  (ground truth: ~0.5, range: 0.4-0.6)".format(gamma_val))
+                        metrics["gamma_value"] = gamma_val
+                        if 0.4 <= gamma_val <= 0.6:
                             print("    RESULT: CORRECT")
                             metrics["gamma_correct"] = True
                         else:
                             print("    RESULT: INCORRECT")
                             metrics["gamma_correct"] = False
                         break
-                
+
                 if kt_val is None and gamma_val is None:
                     print("  No kT or Gamma parameter found in best model")
 
@@ -176,11 +278,11 @@ def cmd_fit(args: argparse.Namespace) -> int:
                 print("\n" + "=" * 50)
                 print("FINAL BENCHMARK RESULTS")
                 print("=" * 50)
-                
+
                 print("  Best model: {m}".format(m=metrics.get("best_model", "N/A")))
                 if best_reasoning:
                     print("  LLM reasoning: {r}".format(r=best_reasoning))
-                
+
                 # Show key fitted parameters
                 if fitted_params:
                     kt_found = None
@@ -195,22 +297,30 @@ def cmd_fit(args: argparse.Namespace) -> int:
                     if gamma_found is not None:
                         print("  Fitted Gamma: {:.3f}".format(gamma_found))
                 print("")
-                
-                # Display final LLM summary
-                final_summary = results.get("final_summary")
-                if final_summary:
-                    print("  Final Summary (LLM):")
-                    for line in final_summary.split(". "):
-                        if line.strip():
-                            print("    {l}.".format(l=line.strip().rstrip(".")))
-                    print("")
-                
+
                 good_fit = metrics.get("cstat_vs_optimal", 1.0) <= 0.05
                 correct_model = metrics.get("found_expected_model", False)
-                correct_kt = metrics.get("kt_correct", False)
-                
-                results_achieved = sum([good_fit, correct_model, correct_kt])
-                
+                correct_kt = metrics.get("kt_correct", False) or metrics.get("gamma_correct", False)
+                param_label = "Correct kT (1.80-1.90 keV)" if metrics.get("kt_value") else "Correct Gamma (0.4-0.6)"
+                param_value = "{:.3f} keV".format(metrics["kt_value"]) if metrics.get("kt_value") else ("{:.3f}".format(metrics["gamma_value"]) if metrics.get("gamma_value") else "N/A")
+
+                # Classification scoring — use final generation's result
+                llm_class = (results.get("classification") or "").lower()
+                expected_class = (ground_truth.get("expected_classification") or "").lower()
+                correct_classification = bool(expected_class and llm_class == expected_class)
+                metrics["llm_classification"] = results.get("classification") or "N/A"
+                metrics["classification_correct"] = correct_classification
+
+                # Find first generation where classification was correct
+                first_correct_class_gen = None
+                for entry in results.get("classification_log", []):
+                    if expected_class and entry.get("classification", "").lower() == expected_class:
+                        first_correct_class_gen = entry["generation"]
+                        break
+                metrics["first_correct_classification_gen"] = first_correct_class_gen
+
+                results_achieved = sum([good_fit, correct_model, correct_kt, correct_classification])
+
                 best_rcstat = best_result.get("reduced_cstat", 0) if best_result else 0
                 best_bic = best_result.get("bic", 0) if best_result else 0
                 print("  [{}] Good fit (|reduced_cstat - 1| <= 0.05): rcstat={:.3f}, BIC={:.1f}".format(
@@ -222,22 +332,27 @@ def cmd_fit(args: argparse.Namespace) -> int:
                     "PASS" if correct_model else "FAIL",
                     metrics.get("best_model", "N/A")
                 ))
-                print("  [{}] Correct kT (1.75-1.95 keV): {}".format(
+                print("  [{}] {}: {}".format(
                     "PASS" if correct_kt else "FAIL",
-                    "{:.3f} keV".format(metrics.get("kt_value", 0)) if metrics.get("kt_value") else "N/A"
+                    param_label,
+                    param_value
+                ))
+                print("  [{}] Correct source classification: {}".format(
+                    "PASS" if correct_classification else "FAIL",
+                    metrics.get("llm_classification", "N/A")
                 ))
                 print("-" * 50)
-                print("  SCORE: {}/3 criteria met".format(results_achieved))
-                if results_achieved == 3:
+                print("  SCORE: {}/4 criteria met".format(results_achieved))
+                if results_achieved == 4:
                     print("  STATUS: SUCCESS")
                 elif results_achieved >= 2:
                     print("  STATUS: PARTIAL SUCCESS")
                 else:
                     print("  STATUS: FAILED")
                 print("=" * 50)
-                
+
                 metrics["final_score"] = results_achieved
-                metrics["final_status"] = "success" if results_achieved == 3 else ("partial" if results_achieved >= 2 else "failed")
+                metrics["final_status"] = "success" if results_achieved == 4 else ("partial" if results_achieved >= 2 else "failed")
 
         if args.output:
             output_data = {
@@ -249,6 +364,30 @@ def cmd_fit(args: argparse.Namespace) -> int:
             with open(args.output, "w") as f:
                 json.dump(output_data, f, indent=2, default=str)
             print("\nSaved to {o}".format(o=args.output))
+
+            base = os.path.splitext(args.output)[0]
+
+            # generations.csv: per-generation, per-model convergence info
+            gen_log = results.get("generations_log", [])
+            if gen_log:
+                gen_path = base + "_generations.csv"
+                with open(gen_path, "w", newline="") as f:
+                    w = csv.DictWriter(
+                        f,
+                        fieldnames=["generation", "model", "reduced_cstat", "bic", "success", "cstat", "dof", "n_free_params"],
+                        extrasaction="ignore",
+                    )
+                    w.writeheader()
+                    w.writerows(gen_log)
+                print("Saved to {o}".format(o=gen_path))
+
+            # results_summary.txt: human-readable benchmark summary
+            summary_lines = _build_summary_text(results, metrics, ground_truth)
+            if summary_lines:
+                summary_path = base + "_summary.txt"
+                with open(summary_path, "w") as f:
+                    f.write("\n".join(summary_lines))
+                print("Saved to {o}".format(o=summary_path))
 
     return 0
 
@@ -284,8 +423,8 @@ Examples:
   # Use a different model
   python cli.py fit --pha data/spectra/lmc_flare/flaresp_grp1.pha --model anthropic/claude-3-7-sonnet-20250219 -v
 
-  # Custom population (6->3 instead of 4->2)
-  python cli.py fit --pha data/spectra/lmc_flare/flaresp_grp1.pha --population-size 3 --offspring-size 6
+  # More hypotheses per round (e.g. 4 proposed, keep best 2)
+  python cli.py fit --pha data/spectra/lmc_flare/flaresp_grp1.pha --population-size 2 --offspring-size 4
 
   # List available spectra
   python cli.py list
@@ -312,11 +451,7 @@ Examples:
         help="Hypotheses generated per generation (default: 4)",
     )
     fit_p.add_argument(
-        "--generations", type=int, default=10, help="Max generations (default: 10)"
-    )
-    fit_p.add_argument(
-        "--convergence", type=int, default=3,
-        help="Stop after N unchanged rounds (default: 3)",
+        "--generations", type=int, default=5, help="Max generations (default: 5)"
     )
     fit_p.add_argument(
         "--emin", type=float, default=0.3, help="Min energy in keV (default: 0.3)"

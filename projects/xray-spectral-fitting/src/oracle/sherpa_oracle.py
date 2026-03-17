@@ -212,6 +212,9 @@ class SherpaOracle(Oracle):
         pc = md.get("persistent_constraints", {})
         mw = md.get("multiwavelength", {})
 
+        # Strip strong diagnostic hints from spectral_properties before passing to LLM
+        sp_filtered = {k: v for k, v in sp.items() if k != "spectral_evolution"}
+
         self._observation = {
             "telescope": obs.get("telescope", "Unknown"),
             "instrument": obs.get("instrument", "Unknown"),
@@ -223,10 +226,10 @@ class SherpaOracle(Oracle):
             "distance_kpc": src.get("distance_kpc"),
             "off_axis_arcmin": src.get("off_axis_arcmin"),
             "localization_uncertainty_arcsec": src.get("localization_uncertainty_arcsec"),
-            "phenomenology": md.get("phenomenology", []),
+            # "phenomenology" excluded — too diagnostic (identifies source class directly)
             "persistent_constraints": pc,
             "temporal_properties": tp,
-            "spectral_properties": sp,
+            "spectral_properties": sp_filtered,  # spectral_evolution excluded
             "energetics": en,
             "multiwavelength": mw,
         }

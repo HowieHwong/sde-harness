@@ -236,18 +236,72 @@ class SpectralFitOptimizer:
 
     def _parse_llm_response(self, text: str) -> List[Dict]:
         """Extract a JSON array of model hypotheses from an LLM response."""
-        json_match = re.search(r"\[[\s\S]*\]", text)
-        if json_match:
+        if not (text or "").strip():
+            return []
+
+        raw = text.strip()
+
+        def try_parse(s: str) -> Optional[List[Dict]]:
+            s = s.strip()
+            if not s:
+                return None
+            # Allow trailing comma before ]
+            s = re.sub(r",\s*\]", "]", s)
+            s = re.sub(r",\s*}", "}", s)
             try:
-                return json.loads(json_match.group())
+                parsed = json.loads(s)
+                if isinstance(parsed, list):
+                    return parsed if parsed else None
+                if isinstance(parsed, dict) and parsed.get("model"):
+                    return [parsed]
             except json.JSONDecodeError:
                 pass
-        json_match = re.search(r"\{[\s\S]*\}", text)
+            return None
+
+        # 1. Try markdown code block (GPT-5 / reasoning models often wrap JSON)
+        for block in re.finditer(r"```(?:json)?\s*([\s\S]*?)```", raw):
+            out = try_parse(block.group(1))
+            if out:
+                return out
+
+        # 2. Find a balanced [...] (first [ to matching ])
+        depth = 0
+        start = None
+        for i, c in enumerate(raw):
+            if c == "[":
+                if depth == 0:
+                    start = i
+                depth += 1
+            elif c == "]":
+                depth -= 1
+                if depth == 0 and start is not None:
+                    out = try_parse(raw[start : i + 1])
+                    if out:
+                        return out
+                    break
+
+        # 3. Try first regex array (greedy)
+        json_match = re.search(r"\[[\s\S]*\]", raw)
         if json_match:
-            try:
-                return [json.loads(json_match.group())]
-            except json.JSONDecodeError:
-                pass
+            out = try_parse(json_match.group())
+            if out:
+                return out
+
+        # 4. Try single object (balanced braces)
+        start = raw.find("{")
+        if start >= 0:
+            depth = 0
+            for i in range(start, len(raw)):
+                if raw[i] == "{":
+                    depth += 1
+                elif raw[i] == "}":
+                    depth -= 1
+                    if depth == 0:
+                        out = try_parse(raw[start : i + 1])
+                        if out:
+                            return out
+                        break
+
         return []
 
     def _generate_hypotheses(self) -> List[Dict]:
@@ -268,11 +322,29 @@ class SpectralFitOptimizer:
         response = self.generator.generate(
             prompt=prompt.build(),
             model_name=self.model_name,
-            temperature=0.8,
+            temperature=1.0,
             max_tokens=2000,
         )
 
-        return self._parse_llm_response(response["text"])
+        text = response.get("text", "")
+        hypotheses = self._parse_llm_response(text)
+        if not hypotheses and text:
+            if getattr(self, "_verbose", False):
+                print("  [DEBUG] LLM returned 0 hypotheses. Raw response (first 600 chars):")
+                print("  ---")
+                print(text[:600].replace("\n", "\n  "))
+                print("  ---")
+            # Save full response to file for inspection (e.g. GPT-5 format issues)
+            try:
+                debug_path = os.path.join(os.getcwd(), "last_llm_response_debug.txt")
+                with open(debug_path, "w") as f:
+                    f.write("=== Full LLM response (0 hypotheses parsed) ===\n\n")
+                    f.write(text)
+                if getattr(self, "_verbose", False):
+                    print("  [DEBUG] Full response saved to: {p}".format(p=debug_path))
+            except Exception:
+                pass
+        return hypotheses
 
     def _generate_summary(self, best_model: str, best_result: Dict, verbose: bool = False) -> str:
         """Generate a final summary explaining why the best model was selected."""
@@ -299,14 +371,57 @@ class SpectralFitOptimizer:
         response = self.generator.generate(
             prompt=prompt.build(),
             model_name=self.model_name,
-            temperature=0.5,
-            max_tokens=500,
+            temperature=1.0,
+            max_tokens=800,
         )
 
         summary = response["text"].strip()
         if verbose:
             print("  {s}".format(s=summary))
         return summary
+
+    def _generate_classification(self, best_model: str, best_result: Dict, verbose: bool = False) -> Dict:
+        """Ask the LLM to classify the source after fitting."""
+        if verbose:
+            print("\n--- Generating Source Classification ---")
+
+        obs = self.oracle.get_observation_summary()
+        obs_summary = format_observation_summary(obs)
+        fitted_params_str = ", ".join(
+            "{k}={v:.4f}".format(k=k, v=v) for k, v in best_result.get("params", {}).items()
+        )
+
+        prompt = SpectralPrompts.get_classification_prompt(
+            observation_summary=obs_summary,
+            best_model=best_model,
+            reduced_cstat=best_result.get("reduced_cstat", 0),
+            fitted_params=fitted_params_str,
+        )
+
+        response = self.generator.generate(
+            prompt=prompt.build(),
+            model_name=self.model_name,
+            temperature=1.0,
+            max_tokens=300,
+        )
+
+        text = response.get("text", "").strip()
+        try:
+            import re as _re
+            match = _re.search(r'\{.*\}', text, _re.DOTALL)
+            if match:
+                data = json.loads(match.group())
+                classification = data.get("classification", "").strip()
+                reasoning = data.get("reasoning", "").strip()
+                if verbose:
+                    print("  Classification: {c}".format(c=classification))
+                    print("  Reasoning: {r}".format(r=reasoning))
+                return {"classification": classification, "reasoning": reasoning}
+        except Exception:
+            pass
+        if verbose:
+            print("  Could not parse classification response: {t}".format(t=text[:100]))
+        return {"classification": text[:200], "reasoning": ""}
 
     # ------------------------------------------------------------------
     # Evolutionary loop
@@ -347,10 +462,9 @@ class SpectralFitOptimizer:
     def optimize(
         self,
         max_generations: int = 10,
-        convergence_rounds: int = 3,
         verbose: bool = True,
     ) -> Dict[str, Any]:
-        """Run the full evolutionary search."""
+        """Run the full evolutionary search for max_generations rounds."""
         if verbose:
             print("=" * 60)
             print("X-RAY SPECTRAL FITTING BENCHMARK")
@@ -363,14 +477,27 @@ class SpectralFitOptimizer:
             print("=" * 60)
 
         best_history: List[Tuple[str, Dict]] = []
-        unchanged_count = 0
-        last_best: Optional[str] = None
+        generations_log: List[Dict[str, Any]] = []
+        classification_log: List[Dict[str, Any]] = []
+        self._verbose = verbose
 
         for gen in range(max_generations):
             if verbose:
                 print("\n--- Generation {g} ---".format(g=gen + 1))
 
             offspring = self.evolve_one_generation()
+
+            for model_str, result, _ in offspring:
+                generations_log.append({
+                    "generation": gen + 1,
+                    "model": model_str,
+                    "reduced_cstat": result.get("reduced_cstat"),
+                    "bic": result.get("bic"),
+                    "success": result.get("success", False),
+                    "cstat": result.get("cstat"),
+                    "dof": result.get("dof"),
+                    "n_free_params": result.get("n_free_params"),
+                })
 
             if verbose:
                 print("Generated {n} hypotheses".format(n=len(offspring)))
@@ -400,41 +527,43 @@ class SpectralFitOptimizer:
                 best_model, best_result, _ = self.population[0]
                 best_history.append((best_model, best_result))
 
+                # Classify once per generation using current best model
+                gen_classification = None
+                if best_result.get("success"):
+                    gen_classification = self._generate_classification(best_model, best_result, verbose=False)
+                    classification_log.append({
+                        "generation": gen + 1,
+                        "best_model": best_model,
+                        "classification": gen_classification.get("classification", "") if gen_classification else "",
+                        "reasoning": gen_classification.get("reasoning", "") if gen_classification else "",
+                    })
+
                 if verbose:
-                    print("\nTop {n} models:".format(n=self.population_size))
-                    for i, (m, r, _) in enumerate(self.population, 1):
+                    all_tried = [
+                        (res.get("model_str", k.split("|")[0]), res)
+                        for k, res in self.oracle.fit_cache.items()
+                    ]
+                    all_tried.sort(key=lambda x: (not x[1].get("success"), x[1].get("bic", float("inf"))))
+                    print("\nAll tried models ({n} total, ranked by BIC):".format(n=len(all_tried)))
+                    for i, (m, r) in enumerate(all_tried, 1):
                         if r.get("success"):
-                            print("  {i}. {m}: {r:.3f}".format(i=i, m=m, r=r["reduced_cstat"]))
+                            print("  {i}. {m}  reduced_cstat={r:.3f}  BIC={bic:.1f}".format(
+                                i=i, m=m, r=r["reduced_cstat"], bic=r.get("bic", 0)))
                         else:
-                            print("  {i}. {m}: FAILED".format(i=i, m=m))
+                            print("  {i}. {m}  FAILED".format(i=i, m=m))
+                    if gen_classification:
+                        print("  Classification: {c}".format(
+                            c=gen_classification.get("classification", "N/A")))
 
-                if last_best == best_model:
-                    unchanged_count += 1
-                else:
-                    unchanged_count = 0
-                last_best = best_model
-
-                if unchanged_count >= convergence_rounds:
-                    if verbose:
-                        print(
-                            "\nConverged! Best model unchanged for {n} rounds.".format(
-                                n=convergence_rounds
-                            )
-                        )
-                    break
-
-        # Generate final summary reasoning
-        final_summary = None
-        if self.population:
-            best_model, best_result, _ = self.population[0]
-            if best_result.get("success"):
-                final_summary = self._generate_summary(best_model, best_result, verbose)
+        # Final classification = last generation's classification
+        final_classification = classification_log[-1].get("classification", "") if classification_log else ""
 
         return {
             "best_model": self.population[0][0] if self.population else None,
             "best_result": self.population[0][1] if self.population else None,
             "best_reasoning": self.population[0][2] if self.population else None,
-            "final_summary": final_summary,
+            "classification": final_classification,
+            "classification_log": classification_log,  # per-generation classification history
             "final_population": [
                 {"model": m, "result": r, "reasoning": reason}
                 for m, r, reason in self.population
@@ -443,4 +572,5 @@ class SpectralFitOptimizer:
             "oracle_calls": self.oracle.call_count,
             "best_history": [{"model": m, "result": r} for m, r in best_history],
             "all_results": self.oracle.fit_cache,
+            "generations_log": generations_log,
         }

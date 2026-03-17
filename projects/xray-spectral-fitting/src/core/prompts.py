@@ -18,7 +18,7 @@ Propose {num_hypotheses} different spectral models to fit this data.
 
 The models will be fitted using Sherpa with the XSPEC model library. For each model, you may optionally provide initial parameter values and bounds, or leave them at defaults.
 
-NOTE: Sherpa requires model expressions with instance names, e.g. "xstbabs.abs1 * (xsbbody.bb1 + xspowerlaw.pow1)" — not "xswabs*(xsbbody + xspowerlaw)".
+NOTE: Sherpa requires model expressions with instance names, e.g. "xstbabs.abs1 * xsapec.apec1" — not "xswabs*apec".
 
 ## Output Format
 
@@ -40,10 +40,7 @@ Respond with a JSON array of {num_hypotheses} models:
 
 IMPORTANT: This is the FIRST round. Propose DIVERSE single-component models to establish baselines.
 
-Each model should be DIFFERENT - try various emission mechanisms:
-- Thermal: xstbabs.abs1 * xsbbody.bb1, xstbabs.abs1 * xsbremss.brems1, xstbabs.abs1 * xsapec.apec1
-- Non-thermal: xstbabs.abs1 * xspowerlaw.pow1, xstbabs.abs1 * xscutoffpl.cpl1
-- Disk: xstbabs.abs1 * xsdiskbb.disk1
+Each model should be DIFFERENT - cover a range of emission mechanisms (thermal, non-thermal, disk, etc.) based on your physical interpretation of the source.
 
 DO NOT propose multi-component models (no "+") in this first round.
 DO NOT propose the same model type multiple times - we need variety first, refinement later.
@@ -68,7 +65,7 @@ Respond ONLY with the JSON array."""
 
 Based on all previous fit results, propose {num_hypotheses} NEW and DIFFERENT models.
 
-NOTE: Sherpa requires model expressions with instance names, e.g. "xstbabs.abs1 * (xsbbody.bb1 + xspowerlaw.pow1)".
+NOTE: Sherpa requires model expressions with instance names, e.g. "xstbabs.abs1 * xsapec.apec1".
 
 IMPORTANT - Propose DIVERSE models, not variations of the same thing:
 1. If you haven't tried many single-component models yet, try MORE DIFFERENT ones (different emission mechanisms).
@@ -107,6 +104,53 @@ Respond with a JSON array of {num_hypotheses} models:
 ```
 
 Respond ONLY with the JSON array."""
+
+    CLASSIFICATION_TEMPLATE = """You are an expert X-ray astronomer. Based on the spectral fitting results and observational data, classify this X-ray transient.
+
+## Observation Summary
+
+{observation_summary}
+
+## Best Spectral Fit So Far
+
+Model: {best_model}
+Reduced C-stat: {reduced_cstat}
+Fitted parameters: {fitted_params}
+
+## Classification Task
+
+Your classification MUST be physically consistent with the best-fit model and its parameters above. Choose the SINGLE best-matching source class from the list below:
+
+1.  Stellar coronal flare (late-type star)
+2.  Tidal disruption event (TDE)
+3.  Low-mass X-ray binary (LMXB) outburst (accretion-powered, non-burst)
+4.  Gamma-ray burst (GRB) X-ray afterglow
+5.  Cataclysmic variable (CV) / classical nova outburst
+6.  Active galactic nucleus (AGN) / Seyfert flare
+7.  Be/X-ray binary (BeXRB) outburst
+8.  Supernova shock breakout
+9.  RS CVn / Algol-type binary flare
+10. Thermonuclear X-ray burst
+11. Blazar / BL Lac flare
+12. Magnetar flare / Soft Gamma Repeater (SGR) outburst
+13. Dwarf nova / AM CVn outburst
+14. Magnetar giant flare
+15. High-mass X-ray binary (HMXB) outburst
+16. Ultraluminous X-ray source (ULX) variability
+17. Supergiant fast X-ray transient (SFXT)
+18. Neutron star merger (kilonova) X-ray counterpart
+19. Wolf-Rayet or O-star wind variability
+20. Symbiotic X-ray binary
+21. Pulsar wind nebula variability
+22. Unknown / unclassified transient
+
+Respond with ONLY a JSON object:
+```json
+{{
+  "classification": "<exact class name from the list above>",
+  "reasoning": "<2-3 sentences explaining how the best-fit model and its parameters led to this classification>"
+}}
+```"""
 
     SUMMARY_TEMPLATE = """You are an expert X-ray astronomer. Based on extensive model fitting, summarize why the best model was selected.
 
@@ -170,6 +214,24 @@ Respond with ONLY the summary text, no JSON or formatting."""
                 "all_results_summary": all_results_summary,
                 "num_hypotheses": num_hypotheses,
                 "errors_section": errors_section,
+            }
+        )
+
+    @staticmethod
+    def get_classification_prompt(
+        observation_summary: str,
+        best_model: str,
+        reduced_cstat: float,
+        fitted_params: str,
+    ) -> "Prompt":
+        """Create prompt for source classification."""
+        return Prompt(
+            custom_template=SpectralPrompts.CLASSIFICATION_TEMPLATE,
+            default_vars={
+                "observation_summary": observation_summary,
+                "best_model": best_model,
+                "reduced_cstat": reduced_cstat,
+                "fitted_params": fitted_params,
             }
         )
 

@@ -1,8 +1,17 @@
 import asyncio
-from typing import Any, Dict, List, Optional, Callable, Union
+from typing import Any, Dict, List, Optional, Callable, Tuple, Union
 from datetime import datetime
 
-import weave
+try:
+    import weave
+    def _weave_op(*args, **kwargs):
+        return weave.op(*args, **kwargs)
+except ImportError:
+    weave = None
+    def _weave_op(f=None, **kwargs):
+        if f is not None:
+            return f
+        return lambda func: func
 
 try:
     from .generation import Generation
@@ -84,7 +93,7 @@ class Workflow:
             }
         }
 
-    @weave.op(
+    @_weave_op(
         postprocess_inputs=remove_inputs_from_weave_log,
         call_display_name=lambda call: f"{call.func_name}__{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
     )
@@ -249,7 +258,7 @@ class Workflow:
         
         return final_result
 
-    @weave.op()
+    @_weave_op()
     async def _log_iteration_start(
         self, 
         iteration: int, 
@@ -264,7 +273,7 @@ class Workflow:
             }
         })
     
-    @weave.op()
+    @_weave_op()
     async def _prepare_iteration_prompt(
         self,
         prompt: Union[Prompt, Callable[[int, Dict[str, List[Any]]], Prompt]],
@@ -293,7 +302,7 @@ class Workflow:
         
         return current_prompt
     
-    @weave.op()
+    @_weave_op()
     async def _log_prompt_preparation(
         self, 
         built_prompt: str, 
@@ -308,13 +317,13 @@ class Workflow:
             }
         })
     
-    @weave.op()
+    @_weave_op()
     async def _execute_generation(
         self, 
         built_prompt: str, 
         gen_args: Dict[str, Any], 
         iteration: int
-    ) -> tuple[Any, Dict[str, Any]]:
+    ) -> Tuple[Any, Dict[str, Any]]:
         """Execute generation with detailed metadata tracking."""
         generation_start_time = asyncio.get_event_loop().time()
         
@@ -357,7 +366,7 @@ class Workflow:
         
         return current_metrics
     
-    @weave.op(postprocess_inputs=remove_inputs_from_weave_log)
+    @_weave_op(postprocess_inputs=remove_inputs_from_weave_log)
     async def _execute_evaluation(
         self,
         text: str,
@@ -365,7 +374,7 @@ class Workflow:
         history: Dict[str, List[Any]],
         iteration: int,
         current_metrics: List[str]
-    ) -> tuple[Dict[str, Any], Dict[str, Any]]:
+    ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         """Execute evaluation with detailed metadata tracking."""
         evaluation_start_time = asyncio.get_event_loop().time()
         
@@ -398,7 +407,7 @@ class Workflow:
         
         return scores, evaluation_meta
     
-    @weave.op()
+    @_weave_op()
     async def _log_iteration_completion(
         self,
         iteration: int,
@@ -420,7 +429,7 @@ class Workflow:
             }
         })
     
-    @weave.op()
+    @_weave_op()
     async def _apply_iteration_feedback(
         self,
         current_prompt: Prompt,
@@ -439,7 +448,7 @@ class Workflow:
             except Exception as e:
                 print(f"Warning: Could not add feedback to prompt: {e}")
     
-    @weave.op()
+    @_weave_op()
     async def _generate_final_results(
         self, 
         history: Dict[str, List[Any]]
@@ -488,7 +497,7 @@ class Workflow:
         
         return final_result
     
-    @weave.op()
+    @_weave_op()
     def _calculate_performance_analytics(self, history: Dict[str, List[Any]]) -> Dict[str, Any]:
         """Calculate detailed performance analytics across iterations."""
         if not history.get("scores"):
@@ -548,7 +557,7 @@ class Workflow:
             # If we can't get length, return 0
             return 0
     
-    @weave.op()
+    @_weave_op()
     def _analyze_best_iteration(self, history: Dict[str, List[Any]]) -> Dict[str, Any]:
         """Enhanced analysis of the best performing iteration."""
         if not history.get("scores"):
@@ -581,7 +590,7 @@ class Workflow:
             "analysis_available": True
         }
     
-    @weave.op()
+    @_weave_op()
     def _calculate_efficiency_metrics(self, history: Dict[str, List[Any]]) -> Dict[str, Any]:
         """Calculate efficiency metrics for the workflow execution."""
         if not history.get("timing_info") or not history.get("scores"):
@@ -747,7 +756,7 @@ class Workflow:
         
         return prompt_function
 
-    @weave.op()
+    @_weave_op()
     def execute_step(self, step_config: Dict[str, Any]) -> Dict[str, Any]:
         """Execute a single workflow step with comprehensive tracking."""
         step_name = step_config.get('name', f'step_{len(self.execution_log)}')
@@ -816,7 +825,7 @@ class Workflow:
         self.execution_log.append(step_result)
         return step_result
 
-    @weave.op()
+    @_weave_op()
     def run_workflow(self, config: Dict[str, Any]) -> Dict[str, Any]:
         """Run the complete workflow with the given configuration."""
         workflow_id = config.get('workflow_id', f'workflow_{len(self.workflows)}')
@@ -876,7 +885,7 @@ class Workflow:
         self.workflows.append(workflow_result)
         return workflow_result
 
-    @weave.op()
+    @_weave_op()
     def optimize_workflow(self, workflow_id: str, optimization_strategy: str = "performance") -> Dict[str, Any]:
         """Optimize workflow based on execution history and strategy."""
         # Find workflow

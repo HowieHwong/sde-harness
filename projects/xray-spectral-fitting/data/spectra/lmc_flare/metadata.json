@@ -99,7 +99,8 @@
       "blackbody": {"kT_keV": 1.8, "kT_err": 0.3}
     },
     "note": "both power law and blackbody provide statistically comparable fits given count statistics",
-    "physical_interpretation": "thermal emission consistent with hot blackbody at ~1.8 keV"
+    "physical_interpretation": "thermal emission consistent with hot blackbody at ~1.8 keV",
+    "expected_classification": "Thermonuclear X-ray burst"
   },
 
   "difficulty": "medium",

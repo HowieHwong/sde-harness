@@ -99,9 +99,57 @@ class Generation:
                 raise ValueError("Either prompt or messages must be provided")
             messages = [{"role": "user", "content": prompt}]
 
-        response = litellm.completion(model=model_id, messages=messages, **cred, **kwargs)
+        # Reasoning models need a large completion token budget (they spend many
+        # tokens on internal chain-of-thought before emitting any output) and
+        # don't support temperature.  Flagged explicitly in models.yaml.
+        if model_config.get("reasoning"):
+            kwargs.pop("temperature", None)
+            kwargs["drop_params"] = True
+            if kwargs.get("max_tokens", 0) < 16000:
+                kwargs["max_tokens"] = 16000
 
-        text = response.choices[0].message.content
+        try:
+            response = litellm.completion(model=model_id, messages=messages, **cred, **kwargs)
+        except Exception as e:
+            raise RuntimeError("LiteLLM call failed for {m}: {e}".format(m=model_id, e=e)) from e
+
+        msg = response.choices[0].message
+
+        def _extract_text(part) -> str:
+            if part is None:
+                return ""
+            if isinstance(part, str):
+                return part
+            if isinstance(part, list):
+                # Content blocks (e.g. OpenAI Responses API): [{"type": "output_text", "text": "..."}]
+                return "".join(
+                    item.get("text", "") if isinstance(item, dict) else str(item)
+                    for item in part
+                )
+            return str(part)
+
+        content = getattr(msg, "content", None)
+        text = _extract_text(content)
+
+        if not text and hasattr(msg, "model_dump"):
+            d = msg.model_dump()
+            text = _extract_text(d.get("content"))
+
+        # GPT-5 / reasoning models: sometimes the only output is in reasoning_content
+        # (content can be empty when the model "thinks" the answer but doesn't emit it separately)
+        if not text:
+            reasoning = getattr(msg, "reasoning_content", None) or ""
+            if isinstance(reasoning, list):
+                reasoning = "".join(_extract_text(r) for r in reasoning)
+            if not reasoning and hasattr(msg, "model_dump"):
+                d = msg.model_dump() or {}
+                reasoning = d.get("reasoning_content") or ""
+            text = reasoning if isinstance(reasoning, str) else _extract_text(reasoning)
+
+        if not text and hasattr(msg, "refusal"):
+            text = str(getattr(msg, "refusal", ""))
+
+        text = text or ""
         return {
             "model_name": model_name,
             "provider": model_config["provider"],

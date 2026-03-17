@@ -5,11 +5,16 @@ import yaml
 from copy import deepcopy
 import gc
 
-import weave
+try:
+    import weave
+    _weave_op = weave.op
+except ImportError:
+    weave = None
+    def _weave_op(f=None, **kwargs):
+        if f is not None:
+            return f
+        return lambda func: func
 
-# API clients
-from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
-import torch
 import litellm
 
 
@@ -62,26 +67,31 @@ def load_model_config(model_name, models, credentials):
 def validate_device(device):
     """
     Validate and return the appropriate device configuration.
-    
+
     Args:
         device: Device specification (str or int or None)
-        
+
     Returns:
         str: Valid device string
     """
+    try:
+        import torch as _torch
+    except ImportError:
+        return device if device is not None else "cpu"
+
     if device is None:
-        if torch.cuda.is_available():
+        if _torch.cuda.is_available():
             return "cuda"
         else:
             return "cpu"
     elif isinstance(device, int):
-        if torch.cuda.is_available() and device < torch.cuda.device_count():
+        if _torch.cuda.is_available() and device < _torch.cuda.device_count():
             return f"cuda:{device}"
         else:
             return "cpu"
     elif isinstance(device, str):
         if device.startswith("cuda"):
-            if torch.cuda.is_available():
+            if _torch.cuda.is_available():
                 return device
             else:
                 print(f"Warning: CUDA requested but not available, falling back to CPU")
@@ -128,8 +138,12 @@ class Generation:
         self.generator = None
         self._model_lock = threading.Lock()  # Thread safety for model loading
 
-        # Thread pool for concurrency - use weave.ThreadPoolExecutor for proper context
-        self.executor = weave.ThreadPoolExecutor(max_workers=max_workers)
+        # Thread pool for concurrency - use weave.ThreadPoolExecutor for proper context if available
+        if weave is not None:
+            self.executor = weave.ThreadPoolExecutor(max_workers=max_workers)
+        else:
+            from concurrent.futures import ThreadPoolExecutor
+            self.executor = ThreadPoolExecutor(max_workers=max_workers)
         self._closed = False
 
     def __enter__(self):
@@ -163,8 +177,12 @@ class Generation:
         self.hf_model_name = None
         
         # Force garbage collection to free GPU memory
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
+        try:
+            import torch as _torch
+            if _torch.cuda.is_available():
+                _torch.cuda.empty_cache()
+        except ImportError:
+            pass
         gc.collect()
 
     def _load_hf_model_and_tokenizer(self, model_name):
@@ -177,15 +195,16 @@ class Generation:
             self._cleanup_hf_model()
             
             try:
+                from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
                 self.hf_model_name = model_name
                 self.hf_model = AutoModelForCausalLM.from_pretrained(model_name)
                 self.hf_model.to(self.device)
                 self.hf_tokenizer = AutoTokenizer.from_pretrained(model_name)
-                
+
                 # Set pad_token if not exists
                 if self.hf_tokenizer.pad_token is None:
                     self.hf_tokenizer.pad_token = self.hf_tokenizer.eos_token
-                
+
                 self.generator = pipeline(
                     "text-generation",
                     model=self.hf_model,
@@ -196,7 +215,7 @@ class Generation:
                 self._cleanup_hf_model()
                 raise RuntimeError(f"Failed to load HuggingFace model {model_name}: {e}")
 
-    @weave.op()
+    @_weave_op()
     def generate(
         self,
         prompt: Optional[str] = None,
@@ -250,7 +269,7 @@ class Generation:
             **kwargs,
         )
     
-    @weave.op()
+    @_weave_op()
     def _generate_litellm(
         self,
         model_config,
@@ -268,12 +287,17 @@ class Generation:
             if k not in kwargs:
                 kwargs[k] = v
         
-        # Handle O-series models which have specific parameter requirements
         model_id = f"{model_config['provider']}/{model_config['model']}"
-        if any(o_model in model_id.lower() for o_model in ['o1', 'o2', 'o3', 'o4']):
-            # O-series models only support temperature=1
+
+        # Reasoning models: drop temperature, bump token budget, allow unknown params
+        if model_config.get("reasoning"):
+            kwargs.pop("temperature", None)
+            kwargs["drop_params"] = True
+            if kwargs.get("max_tokens", 0) < 16000:
+                kwargs["max_tokens"] = 16000
+        elif any(o_model in model_id.lower() for o_model in ['o1', 'o2', 'o3', 'o4']):
+            # Legacy o-series fallback for models not yet flagged in models.yaml
             kwargs['temperature'] = 1.0
-            # Drop unsupported parameters to avoid errors
             kwargs['drop_params'] = True
         
         if messages is None:
@@ -301,7 +325,7 @@ class Generation:
             "finish_reason": response.choices[0].finish_reason,
         }
     
-    @weave.op()
+    @_weave_op()
     def _generate_hf(
         self,
         model_config,
@@ -405,7 +429,8 @@ class Generation:
 
 if __name__ == "__main__":
     # Initialize weave for testing this module only
-    weave.init("generation_module_test")
+    if weave is not None:
+        weave.init("generation_module_test")
     
     # Initialize with multiple providers
     with Generation(max_workers=8) as gen:

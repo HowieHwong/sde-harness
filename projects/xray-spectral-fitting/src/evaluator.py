@@ -87,7 +87,14 @@ def evaluate_results(
 def _normalize_model_classes(classes: list) -> list:
     """Normalize model class names to treat equivalent models the same."""
     equivalents = {
+        # blackbody variants
         "xsbbodyrad": "xsbbody",
+        "xszbbody": "xsbbody",
+        # absorption variants — all equivalent neutral ISM absorption models
+        "xsphabs": "xstbabs",
+        "xswabs":  "xstbabs",
+        "xstbabs": "xstbabs",
+        "xsnhabs": "xstbabs",
     }
     return [equivalents.get(c, c) for c in classes]
 
