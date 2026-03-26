@@ -50,7 +50,7 @@ if [[ "$OS" == "Darwin" && "$ARCH" == "arm64" ]]; then
     echo ""
     
     # Create x86_64 environment for Apple Silicon
-    CONDA_SUBDIR=osx-64 conda create -n $ENV_NAME python=3.10 -y
+    CONDA_SUBDIR=osx-64 conda create -n $ENV_NAME python=3.8 -y
     
     # Configure environment to stay x86_64
     conda activate $ENV_NAME
@@ -64,7 +64,7 @@ else
     echo ""
     
     # Create native environment
-    conda create -n $ENV_NAME python=3.10 -y
+    conda create -n $ENV_NAME python=3.8 -y
     conda activate $ENV_NAME
     
     # Install Sherpa with XSPEC
@@ -74,7 +74,7 @@ fi
 # Install Python dependencies
 echo ""
 echo "Installing Python dependencies..."
-pip install openai
+pip install litellm pyyaml
 
 echo ""
 echo "=============================================="
@@ -83,7 +83,7 @@ echo "=============================================="
 echo ""
 echo "To use the environment:"
 echo "  1. Activate:  conda activate $ENV_NAME"
-echo "  2. Set API key: export OPENAI_API_KEY='your-key'"
+echo "  2. Fill in API keys: config/credentials.yaml"
 echo "  3. Run: python cli.py fit --pha data/spectra/lmc_flare/flaresp_grp1.pha -v"
 echo ""
 echo "To verify installation:"
