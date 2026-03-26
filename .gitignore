@@ -13,4 +13,5 @@ llm-srbench/
 llm-sr/
 projects/llm_sr_old/
 projects/llmsr/outputs
+projects/xray-spectral-fitting/*results*
 
