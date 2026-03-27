@@ -1,0 +1,12 @@
+# X-Ray Spectral Fitting Dependencies
+#
+# Install with: pip install -r requirements.txt
+#
+# IMPORTANT: Sherpa with XSPEC support must be installed separately via conda:
+#   conda install -c conda-forge -c ciao sherpa
+#
+# Or use the provided setup script:
+#   ./setup_env.sh
+
+# LLM API client
+openai>=1.0.0

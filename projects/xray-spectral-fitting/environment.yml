@@ -1,0 +1,23 @@
+# Conda environment for X-Ray Spectral Fitting Benchmark
+# 
+# This environment provides Sherpa with XSPEC model support for X-ray spectral fitting.
+#
+# Installation:
+#   conda env create -f environment.yml
+#   conda activate xray-spectral-fitting
+#   pip install openai
+#
+# Note: Sherpa with XSPEC requires the CIAO conda channel and works best on x86_64.
+# On Apple Silicon (M1/M2/M3), you may need to use Rosetta or the ml4ciao environment.
+
+name: xray-spectral-fitting
+channels:
+  - conda-forge
+  - ciao
+  - defaults
+dependencies:
+  - python=3.10
+  - sherpa
+  - pip
+  - pip:
+    - openai>=1.0.0

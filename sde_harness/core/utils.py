@@ -2,14 +2,18 @@
 Utility functions for sci_demo framework.
 """
 
-import weave
 from typing import Any, Dict
+
+try:
+    import weave
+except ImportError:
+    weave = None
 
 def is_weave_initialized() -> bool:
     """Check if weave has been initialized by the user."""
+    if weave is None:
+        return False
     try:
-        import weave
-        # Use the official get_client() function to check if weave is initialized
         client = weave.get_client()
         return client is not None
     except Exception:
