@@ -1,0 +1,39 @@
+
+ELUCIDATION SUMMARY REPORT
+==========================
+
+Target Molecule: SAMP_016
+Status: SUCCESS
+Final NMR Similarity: 1.000
+Total Iterations: 3
+Execution Time: 53.43 seconds
+
+ITERATION DETAILS:
+
+Iteration 1:
+- Generated SMILES: The
+- NMR Similarity: 0.000
+- Response Length: 1452 characters
+- Timestamp: 2025-08-25 12:56:13.259825945
+
+Iteration 2:
+- Generated SMILES: The
+- NMR Similarity: 0.000
+- Response Length: 2146 characters
+- Timestamp: 2025-08-25 12:56:31.791213036
+
+Iteration 3:
+- Generated SMILES: C1CC2=CC=CC=C2C(=O)C1
+- NMR Similarity: 1.000
+- Response Length: 1879 characters
+- Timestamp: 2025-08-25 12:56:52.970525026
+
+
+ANALYSIS:
+- Best Similarity: 1.000
+- Average Similarity: 0.333
+- Improvement Rate: 0.500
+- Final Structure: C1CC2=CC=CC=C2C(=O)C1
+
+RECOMMENDATIONS:
+- Elucidation successful! Target similarity threshold reached.
