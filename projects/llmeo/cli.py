@@ -7,7 +7,6 @@ Command Line Interface for scientific discovery workflows.
 import argparse
 import sys
 import os
-from typing import Optional
 
 # Add project root to Python path
 project_root = os.path.dirname(
@@ -15,9 +14,45 @@ project_root = os.path.dirname(
 )
 sys.path.insert(0, project_root)
 
-# Import local modules
-from src.modes import run_few_shot, run_single_prop, run_multi_prop
-from src.utils.data_loader import validate_data_files
+validate_data_files = None
+run_few_shot = None
+run_single_prop = None
+run_multi_prop = None
+
+
+def get_validate_data_files():
+    """Load data validation only for commands that actually run a mode."""
+    global validate_data_files
+
+    if validate_data_files is None:
+        from src.utils.data_loader import validate_data_files as loaded_validator
+        validate_data_files = loaded_validator
+    return validate_data_files
+
+
+def get_mode_runner(mode: str):
+    """Load mode implementations only after CLI parsing."""
+    global run_few_shot, run_single_prop, run_multi_prop
+
+    if mode == "few-shot":
+        if run_few_shot is None:
+            from src.modes import run_few_shot as loaded_runner
+            run_few_shot = loaded_runner
+        return run_few_shot
+
+    if mode == "single-prop":
+        if run_single_prop is None:
+            from src.modes import run_single_prop as loaded_runner
+            run_single_prop = loaded_runner
+        return run_single_prop
+
+    if mode == "multi-prop":
+        if run_multi_prop is None:
+            from src.modes import run_multi_prop as loaded_runner
+            run_multi_prop = loaded_runner
+        return run_multi_prop
+
+    raise ValueError(f"Unknown mode: {mode}")
 
 
 def main():
@@ -30,7 +65,6 @@ Example usage:
   python cli.py few-shot --iterations 3 --temperature 0.1
   python cli.py multi-prop --max-tokens 5000 --samples 20
   python cli.py single-prop --num-samples 15
-  python cli.py diy-gen --temperature 0.8
         """,
     )
 
@@ -44,7 +78,7 @@ Example usage:
     common_args.add_argument("--max-tokens", type=int, default=8000, help="Maximum token number (default: 8000)")
     common_args.add_argument("--iterations", type=int, default=2, help="Iteration number (default: 2)")
     common_args.add_argument("--seed", type=int, default=42, help="Random seed (default: 42)")
-    common_args.add_argument("--model", type=str, default="deepseek/deepseek-chat", help="Choose From [openai/gpt-4o-2024-08-06, anthropic/claude-3-7-sonnet-20250219, deepseek/deepseek-chat]")
+    common_args.add_argument("--model", type=str, default="deepseek/deepseek-v4-flash", help="Model name from the harness root models.yaml")
     common_args.add_argument("--temperature", type=float, default=1, help="Temperature")
     # Few-shot mode
     few_shot_parser = subparsers.add_parser(
@@ -70,18 +104,20 @@ Example usage:
 
 
     # Validate data files
-    if not validate_data_files():
+    if not get_validate_data_files()():
         sys.exit(1)
 
     # Run corresponding mode
     try:
+        runner = get_mode_runner(args.mode)
+
         if args.mode == "few-shot":
             print(args)
-            run_few_shot(args)
+            runner(args)
         elif args.mode == "single-prop":
-            run_single_prop(args)
+            runner(args)
         elif args.mode == "multi-prop":
-            run_multi_prop(args)
+            runner(args)
         else:
             print(f"❌ Unknown mode: {args.mode}")
             sys.exit(1)

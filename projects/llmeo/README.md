@@ -7,31 +7,63 @@
 
 ## 📦 Install
 
-1. Get to the Project folder:
-   ```bash
-   cd projects/llmeo
-   ```
+Run these commands from the harness root unless a step says otherwise.
 
-2. Set Your API KEY:
-   ```bash
-   export OPENAI_API_KEY="your-api-key-here"
-   ```
+### 1. Enter the LLMEO project folder
 
-3. Download required dataset:
-   ```bash
-   wget https://zenodo.org/records/14328055/files/ground_truth_fitness_values.csv -P data/
-   ```
+```bash
+cd projects/llmeo
+```
 
-4. Set conda env:
-   ```bash
-   conda env create -f environment.yml
-   conda activate ScienceBench_LLMEO
-   ```
+### 2. Download required dataset
 
-5. (Optional) Run Test File:
-   ```bash
-   python test.py
-   ```
+```bash
+wget https://zenodo.org/records/14328055/files/ground_truth_fitness_values.csv -P data/
+```
+
+### 3. Set up the conda environment
+
+```bash
+conda env create -f environment.yml
+conda activate ScienceBench_LLMEO
+```
+
+### 4. Configure model files in the harness root
+
+```bash
+cd ../..
+
+cat > models.yaml <<'EOF'
+deepseek/deepseek-v4-flash:
+  provider: deepseek
+  model: deepseek-v4-flash
+  credentials: deepseek
+  __call_args:
+    thinking:
+      type: disabled
+    allowed_openai_params:
+      - thinking
+
+deepseek/deepseek-chat:
+  provider: deepseek
+  model: deepseek-chat
+  credentials: deepseek
+EOF
+
+cat > credentials.yaml <<'EOF'
+deepseek:
+  api_key: ${DEEPSEEK_API_KEY}
+EOF
+
+export DEEPSEEK_API_KEY="your-api-key-here"
+cd projects/llmeo
+```
+
+### 5. Optional legacy test file
+
+```bash
+python test.py
+```
 
 ## 🎯 Usage
 
@@ -81,12 +113,35 @@ python cli.py few-shot --help
 
 All modes support the following parameters:
 
-- `--api-key`: OpenAI API key
 - `--samples`: Initial sample number (default: 10)
 - `--num-samples`: Generated sample number (default: 10)
-- `--max-tokens`: Maximum token number (default: 5000)
-- `--temperature`: Temperature parameter (default: 0.0)
+- `--max-tokens`: Maximum token number (default: 8000)
+- `--iterations`: Iteration number (default: 2)
+- `--model`: Model name from the harness root `models.yaml` (default: `deepseek/deepseek-v4-flash`)
+- `--temperature`: Temperature parameter (default: 1.0)
 - `--seed`: Random seed (default: 42)
+
+### Verified Smoke Test
+
+After completing the setup above, run a minimal one-iteration check:
+
+```bash
+python cli.py few-shot \
+  --iterations 1 \
+  --samples 1 \
+  --num-samples 1 \
+  --temperature 0
+```
+
+The command should validate the data files, generate a response, evaluate `top10_avg_gap`, and print a final score in the terminal. A score of `0` is possible for this tiny smoke test and does not indicate a runtime failure.
+
+### Output
+
+The current CLI prints evaluation results to stdout. The final line has the form:
+
+```text
+✅ Few-Shot mode completed! Final score: {'top10_avg_gap': ...}
+```
 
 ## 🏗️ Project Structure
 
@@ -99,14 +154,13 @@ projects/llmeo/
 │   │   ├── few_shot.py     # Few-shot learning mode
 │   │   ├── single_prop.py  # Single property optimization mode
 │   │   └── multi_prop.py   # Multi-property optimization mode
+│   ├── weave_utils.py  # Weave logging helpers
 │   ├── utils/          # Utility modules
 │   │   ├── __init__.py
 │   │   ├── data_loader.py  # Data loading utilities
 │   │   ├── prompt.py       # Prompt templates
 │   │   └── _utils.py       # Utility functions
-│   └── evaluators/     # Evaluation modules
 ├── data/               # Data files
-├── docs/               # Documentation
 ├── tests/              # Test files
 │   ├── __init__.py
 │   ├── conftest.py
@@ -122,59 +176,13 @@ projects/llmeo/
 └── README.md           # This document
 ```
 
-## 🔧 Extension Development
-
-### Adding New Running Modes
-
-1. Create a new mode file in the `src/modes/` directory
-2. Implement the mode function, e.g., `run_new_mode(args)`
-3. Import the new function in `src/modes/__init__.py`
-4. Add new subcommand in `cli.py`
-
-Example:
-
-```python
-# src/modes/new_mode.py
-def run_new_mode(args):
-    """Logic for running new mode"""
-    print("🆕 Running new mode...")
-    # Implement specific logic
-    return result
-
-# Add in cli.py
-new_mode_parser = subparsers.add_parser(
-    'new-mode', 
-    parents=[common_args],
-    help='New mode description'
-)
-```
-
-### Custom Configuration
-
-You can customize settings through configuration files:
-
-```json
-{
-  "api": {
-    "openai_api_key": "your-key"
-  },
-  "generation": {
-    "max_tokens": 3000,
-    "temperature": 0.1
-  },
-  "workflow": {
-    "max_iterations": 5
-  }
-}
-```
-
 ## 🐛 Troubleshooting
 
 ### Common Issues
 
 1. **API Key Error**
    ```bash
-   export OPENAI_API_KEY="your-actual-key"
+   export DEEPSEEK_API_KEY="your-actual-key"
    ```
 
 2. **Missing Data Files**
@@ -193,13 +201,23 @@ You can customize settings through configuration files:
    conda activate ScienceBench_LLMEO
    ```
 
-### Debug Mode
+4. **Weave Login / Logging Issues**
 
-Enable detailed logging:
+   LLMEO disables Weave network logging by default so local checks do not require a Weights & Biases account or network access. To enable Weave logging for a real run:
+   ```bash
+   LLMEO_ENABLE_WEAVE=true python cli.py few-shot --iterations 1 --samples 1 --num-samples 1
+   ```
 
-```bash
-python cli.py few-shot --debug
-```
+5. **Legacy Model Alias**
+
+   `deepseek/deepseek-chat` is kept in the example config for old runs, but the default is `deepseek/deepseek-v4-flash`.
+   ```bash
+   python cli.py few-shot --model deepseek/deepseek-v4-flash
+   ```
+
+6. **DeepSeek V4-Flash Empty Output**
+
+   DeepSeek V4-Flash enables thinking mode by default. For this project, keep the `thinking: disabled` and `allowed_openai_params` entries shown above in `models.yaml`; otherwise the model may spend the full token budget on reasoning and return empty visible content.
 
 ## 📚 Examples
 
@@ -207,7 +225,7 @@ python cli.py few-shot --debug
 
 ```bash
 # 1. Set up environment
-export OPENAI_API_KEY="your-key"
+export DEEPSEEK_API_KEY="your-key"
 cd projects/llmeo
 
 # 2. Run Few-shot mode
@@ -238,4 +256,3 @@ This project is based on the original LLMEO project and follows the correspondin
 
 - Original code repository: [https://github.com/deepprinciple/llmeo](https://github.com/deepprinciple/llmeo)
 - Reference project cli: [https://github.com/schwallergroup/steer](https://github.com/schwallergroup/steer)
-    

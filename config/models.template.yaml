@@ -67,6 +67,16 @@ deepseek/deepseek-chat:
   model: deepseek-chat
   credentials: deepseek
 
+deepseek/deepseek-v4-flash:
+  provider: deepseek
+  model: deepseek-v4-flash
+  credentials: deepseek
+  __call_args:
+    thinking:
+      type: disabled
+    allowed_openai_params:
+      - thinking
+
 # Benchmark comparison models (gpt-5-chat, gpt-5, deepseek-R1, claude-sonnet-4.5)
 openai/gpt-5-chat:
   provider: openai

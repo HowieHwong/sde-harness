@@ -17,6 +17,9 @@ dependencies:
   - httpx=0.28.1
   - pip:
     - torch
-    - transformers
+    - transformers==4.53.0
+    - tokenizers==0.21.0
+    - litellm==1.73.6.post1
+    - weave>=0.51.54
     - molsimplify==1.7.5
     - git+https://github.com/hkneiding/uxtbpy

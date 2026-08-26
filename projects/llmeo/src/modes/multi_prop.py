@@ -8,6 +8,9 @@ import sys
 import os
 from typing import Any, Dict
 
+from ..weave_utils import configure_weave, safe_weave_init
+
+configure_weave()
 import weave
 
 # Add project root to Python path
@@ -40,7 +43,7 @@ def run_multi_prop(args) -> Dict[str, Any]:
     print("🔄 Run multi-property optimization mode...")
 
     # Setup components
-    weave.init("LLMEO-multi_prop_mode")
+    safe_weave_init(weave, "LLMEO-multi_prop_mode")
     generator = Generation(models_file=project_root + "/models.yaml", credentials_file=project_root + "/credentials.yaml")
     # Load data
     with open("data/1M-space_50-ligands-full.csv", "r") as fo:

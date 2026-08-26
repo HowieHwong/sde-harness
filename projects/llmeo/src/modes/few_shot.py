@@ -8,6 +8,9 @@ import sys
 import os
 from typing import Any, Dict
 
+from ..weave_utils import configure_weave, safe_weave_init
+
+configure_weave()
 import weave
 
 # Add project root to Python path
@@ -38,7 +41,7 @@ def run_few_shot(args) -> Dict[str, Any]:
         Workflow execution result
     """
     print("🚀 Run Few-Shot learning mode...")
-    weave.init("few_shot_mode")
+    safe_weave_init(weave, "few_shot_mode")
     # Setup components
     generator = Generation(models_file=project_root + "/models.yaml", credentials_file=project_root + "/credentials.yaml")
 
