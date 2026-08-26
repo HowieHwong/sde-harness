@@ -14,14 +14,17 @@ import pandas as pd
 from unittest.mock import patch, MagicMock
 import sys
 import os
-import weave
+from pathlib import Path
 
 
 # Add project root to Python path
-project_root = os.path.dirname(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-)
+project_root = str(Path(__file__).resolve().parents[2])
 sys.path.insert(0, project_root)
+
+from src.weave_utils import configure_weave, safe_weave_init
+
+configure_weave()
+import weave
 
 from src.utils._utils import (
     make_text_for_existing_tmcs,
@@ -37,19 +40,19 @@ class TestUtils(unittest.TestCase):
 
     def test_Generation(self):
         """Test Generation class"""
-        weave.init("LLMEO-test")
+        safe_weave_init(weave, "LLMEO-test")
         gen = Generation(models_file=project_root + "/models.yaml", credentials_file=project_root + "/credentials.yaml")
         self.assertIsNotNone(gen)
     
     def test_model(self):
         """Test model"""
-        weave.init("LLMEO-test")
+        safe_weave_init(weave, "LLMEO-test")
         gen = Generation(models_file=project_root + "/models.yaml", credentials_file=project_root + "/credentials.yaml")
 
         # response = gen.generate("Hello, nice to meet you", model_name="openai/gpt-4o-2024-08-06")
         # self.assertIsNotNone(response)
         # print("GPT-4o: Worked")
-        # response = gen.generate("Hello, nice to meet you", model_name="deepseek/deepseek-chat")
+        # response = gen.generate("Hello, nice to meet you", model_name="deepseek/deepseek-v4-flash")
         # self.assertIsNotNone(response)
         # print("DeepSeek-Chat: Worked")
         # response = gen.generate("Hello, nice to meet you", model_name="anthropic/claude-3-7-sonnet-20250219")

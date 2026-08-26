@@ -8,6 +8,9 @@ import sys
 import os
 from typing import Any, Dict
 
+from ..weave_utils import configure_weave, safe_weave_init
+
+configure_weave()
 import weave
 
 # Add project root to Python path
@@ -38,7 +41,7 @@ def run_single_prop(args) -> Dict[str, Any]:
         Workflow execution result
     """
     print("🎯 Run single property optimization mode...")
-    weave.init("LLMEO-single-prop")
+    safe_weave_init(weave, "LLMEO-single-prop")
     # Setup components
     generator = Generation(models_file=project_root + "/models.yaml", credentials_file=project_root + "/credentials.yaml")
 

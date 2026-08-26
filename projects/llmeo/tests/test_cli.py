@@ -53,7 +53,7 @@ class TestCLIFunctionality(unittest.TestCase):
             common_args.add_argument("--max-tokens", type=int, default=8000)
             common_args.add_argument("--iterations", type=int, default=2)
             common_args.add_argument("--seed", type=int, default=42)
-            common_args.add_argument("--model", type=str, default="deepseek/deepseek-chat")
+            common_args.add_argument("--model", type=str, default="deepseek/deepseek-v4-flash")
             common_args.add_argument("--temperature", type=float, default=1)
             
             few_shot_parser = subparsers.add_parser("few-shot", parents=[common_args])
@@ -86,7 +86,7 @@ class TestCLIFunctionality(unittest.TestCase):
         common_args.add_argument("--max-tokens", type=int, default=8000)
         common_args.add_argument("--iterations", type=int, default=2)
         common_args.add_argument("--seed", type=int, default=42)
-        common_args.add_argument("--model", type=str, default="deepseek/deepseek-chat")
+        common_args.add_argument("--model", type=str, default="deepseek/deepseek-v4-flash")
         common_args.add_argument("--temperature", type=float, default=1)
         
         single_prop_parser = subparsers.add_parser("single-prop", parents=[common_args])
@@ -117,7 +117,7 @@ class TestCLIFunctionality(unittest.TestCase):
         common_args.add_argument("--max-tokens", type=int, default=8000)
         common_args.add_argument("--iterations", type=int, default=2)
         common_args.add_argument("--seed", type=int, default=42)
-        common_args.add_argument("--model", type=str, default="deepseek/deepseek-chat")
+        common_args.add_argument("--model", type=str, default="deepseek/deepseek-v4-flash")
         common_args.add_argument("--temperature", type=float, default=1)
         
         multi_prop_parser = subparsers.add_parser("multi-prop", parents=[common_args])
@@ -139,7 +139,7 @@ class TestCLIFunctionality(unittest.TestCase):
         common_args.add_argument("--max-tokens", type=int, default=8000)
         common_args.add_argument("--iterations", type=int, default=2)
         common_args.add_argument("--seed", type=int, default=42)
-        common_args.add_argument("--model", type=str, default="deepseek/deepseek-chat")
+        common_args.add_argument("--model", type=str, default="deepseek/deepseek-v4-flash")
         common_args.add_argument("--temperature", type=float, default=1)
         
         few_shot_parser = subparsers.add_parser("few-shot", parents=[common_args])
@@ -151,7 +151,7 @@ class TestCLIFunctionality(unittest.TestCase):
         self.assertEqual(args.max_tokens, 8000)
         self.assertEqual(args.iterations, 2)
         self.assertEqual(args.seed, 42)
-        self.assertEqual(args.model, "deepseek/deepseek-chat")
+        self.assertEqual(args.model, "deepseek/deepseek-v4-flash")
         self.assertEqual(args.temperature, 1)
 
     @patch('cli.run_few_shot')
@@ -279,7 +279,7 @@ class TestCLIFunctionality(unittest.TestCase):
         common_args.add_argument("--max-tokens", type=int, default=8000)
         common_args.add_argument("--iterations", type=int, default=2)
         common_args.add_argument("--seed", type=int, default=42)
-        common_args.add_argument("--model", type=str, default="deepseek/deepseek-chat")
+        common_args.add_argument("--model", type=str, default="deepseek/deepseek-v4-flash")
         common_args.add_argument("--temperature", type=float, default=1)
         
         few_shot_parser = subparsers.add_parser("few-shot", parents=[common_args])
