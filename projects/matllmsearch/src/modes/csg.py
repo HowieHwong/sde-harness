@@ -143,10 +143,22 @@ class MatLLMSearchCSG:
                 "total": iteration_total_tokens // num_structures if num_structures > 0 else 0
             }
             
+            # Get parent groups for each structure (if available)
+            parent_groups = getattr(self.structure_generator, '_last_parent_groups', [None] * num_structures)
+            
             # Save generation data (only for new children)
             generation_data = []
             for i, (structure, evaluation) in enumerate(zip(new_structures, child_evaluations)):
                 if structure and evaluation:
+                    # Get parent group for this structure
+                    parent_group = parent_groups[i] if i < len(parent_groups) else None
+                    
+                    # Serialize parent structures to JSON
+                    parents_json = None
+                    if parent_group is not None and len(parent_group) > 0:
+                        parents_dict = [parent.as_dict() for parent in parent_group if parent is not None]
+                        parents_json = json.dumps(parents_dict) if parents_dict else None
+                    
                     generation_data.append({
                         'Iteration': iteration + 1,
                         'Structure': json.dumps(structure.as_dict()),
@@ -158,7 +170,8 @@ class MatLLMSearchCSG:
                         'Valid': evaluation.valid,
                         'InputTokens': tokens_per_structure["input"],
                         'OutputTokens': tokens_per_structure["output"],
-                        'TotalTokens': tokens_per_structure["total"]
+                        'TotalTokens': tokens_per_structure["total"],
+                        'Parents': parents_json  # JSON array of parent structures
                     })
             
             all_generations.extend(generation_data)
@@ -215,7 +228,7 @@ class MatLLMSearchCSG:
         print(f"Total Tokens: {total_tokens:,}")
         print(f"{'='*60}\n")
         
-        # Save token usage summary to a separate file
+        # Save token usage summary
         token_summary = {
             "total_input_tokens": total_input_tokens,
             "total_output_tokens": total_output_tokens,

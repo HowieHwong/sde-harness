@@ -121,6 +121,7 @@ class StructureGenerator:
             # Zero-shot generation using SDE-Harness Prompt
             zeroshot_instruction = self.csg_zeroshot_prompt.build()
             instructions = [zeroshot_instruction] * self.args.population_size
+            input_groups = []  # No parent groups for zero-shot
         else:
             # Prepare input structures for prompting
             input_groups = self._group_structures(parent_structures)
@@ -184,8 +185,22 @@ class StructureGenerator:
         
         self._last_token_usage = token_usage_list
         
-        # Parse structures from responses
-        structures = self._parse_structures_from_responses(responses)
+        # Parse structures from responses and track parent groups
+        structures = []
+        parent_groups_list = []  # Track which parent group each structure came from
+        
+        for i, response in enumerate(responses):
+            response_structures = self._parse_single_response(response)
+            structures.extend(response_structures)
+            
+            # Associate each structure from this response with its parent group
+            # For zero-shot (no input_groups), parent_group is None
+            parent_group = input_groups[i] if input_groups and i < len(input_groups) else None
+            for _ in response_structures:
+                parent_groups_list.append(parent_group)
+        
+        # Store parent groups for later use in csg.py
+        self._last_parent_groups = parent_groups_list
         
         return structures
     
