@@ -1,21 +1,22 @@
-## Core dependencies
-torch>=1.10.0
+# MatLLMSearch dependencies
+# The SDE-Harness framework (installed from the repo root via `pip install -e .`)
+# also provides litellm, weave, transformers, torch, and the LLM provider SDKs.
+# The packages below are the ones MatLLMSearch imports directly.
+
+# Core
+torch>=2.0.0
 numpy>=1.21.0
 pandas>=1.3.0
-matplotlib>=3.5.0
-seaborn>=0.11.0
+pyyaml>=6.0
+tqdm>=4.60.0
 
-## Materials science
+# Materials science
 pymatgen>=2022.7.25
 chgnet>=0.3.0
-matgl>=0.9.0
+matgl>=0.9.0          # only required for --mlip m3gnet
 
-## Machine learning and LLM
-transformers>=4.20.0
-vllm>=0.2.0
+# LLM generation (also pulled in by the SDE-Harness framework)
+transformers>=4.30.0
+litellm>=1.73.6
+weave>=0.51.54
 openai>=1.0.0
-
-## Utilities
-tqdm>=4.60.0
-pathlib
-dataclasses

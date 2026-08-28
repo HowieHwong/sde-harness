@@ -46,7 +46,7 @@ class StabilityCalculator:
             atom_graph_cutoff=6, bond_graph_cutoff=3, algorithm="fast", on_isolated_atoms="warn"
         )
         self.chgnet.graph_converter = converter
-        self.relaxer = StructOptimizer(model=self.chgnet, use_device='cuda:0')
+        self.relaxer = StructOptimizer(model=self.chgnet, use_device=self.device)
         self.EquationOfState = EquationOfState
         
         # Initialize M3GNet if mlip is 'm3gnet'

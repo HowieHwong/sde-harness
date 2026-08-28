@@ -31,52 +31,44 @@ class MaterialsOracle(Oracle):
     def __init__(self, opt_goal: str = "e_hull_distance", mlip: str = "chgnet", 
                  ppd_path: str = "data/2023-02-07-ppd-mp.pkl.gz", device: str = "cuda"):
         
-        # Initialize parent Oracle class
         super().__init__()
-        
+
         self.opt_goal = opt_goal
         self.mlip = mlip
-        
-        # Initialize stability calculator
+
         self.stability_calculator = StabilityCalculator(
             mlip=mlip,
             ppd_path=ppd_path,
             device=device
         )
-        
-        # Register materials-specific metrics
+
         self._register_materials_metrics()
-    
+
     def _register_materials_metrics(self) -> None:
         """Register materials-specific metrics"""
-        
-        # Register stability metric
+
         def stability_metric(prediction: MaterialsEvaluation, reference: Any, **kwargs) -> float:
             """Evaluate stability (E_hull distance) - lower is better"""
             if not prediction.valid:
                 return float('inf')
             return prediction.e_hull_distance
-        
-        # Register bulk modulus metric  
+
         def bulk_modulus_metric(prediction: MaterialsEvaluation, reference: Any, **kwargs) -> float:
             """Evaluate Bulk modulus"""
             if not prediction.valid:
                 return float('-inf')
             return -prediction.bulk_modulus_relaxed
-        
-        # Register multi-objective metric
+
         def multi_objective_metric(prediction: MaterialsEvaluation, reference: Any, **kwargs) -> float:
             """Multi-objective score combining stability and bulk modulus"""
             if not prediction.valid:
                 return float('inf')
             return prediction.objective
-        
-        # Register validity metric
+
         def validity_metric(prediction: MaterialsEvaluation, reference: Any, **kwargs) -> float:
             """Structure validity (1.0 if valid, 0.0 if invalid)"""
             return float(prediction.valid)
-        
-        # Register the metrics
+
         self.register_metric("stability", stability_metric)
         self.register_metric("bulk_modulus", bulk_modulus_metric) 
         self.register_metric("multi_objective", multi_objective_metric)
@@ -125,8 +117,7 @@ class MaterialsOracle(Oracle):
             
             # Return inverse of variance (higher = more converged)
             return 1.0 / (1.0 + variance)
-        
-        # Register multi-round metrics
+
         self.register_multi_round_metric("materials_improvement", materials_improvement_rate)
         self.register_multi_round_metric("convergence_rate", convergence_rate)
     
@@ -134,18 +125,16 @@ class MaterialsOracle(Oracle):
         """Evaluate a list of structures"""
         if not structures:
             return []
-        
-        # Compute stability results
+
         wo_ehull = (self.opt_goal == "bulk_modulus_relaxed")
         wo_bulk = (self.opt_goal == "e_hull_distance")
-        
+
         stability_results = self.stability_calculator.compute_stability(
             structures,
             wo_ehull=wo_ehull,
             wo_bulk=wo_bulk
         )
-        
-        # Convert to MaterialsEvaluation objects
+
         evaluations = []
         for i, (structure, stability_result) in enumerate(zip(structures, stability_results)):
             evaluation = self._create_evaluation(structure, stability_result)

@@ -1,62 +1,102 @@
-# MatLLMSearch
+# MatLLMSearch - LLM-based Crystal Structure Discovery
 
-LLM-based Crystal Structure Generation and Optimization for Materials Discovery, integrated with the SDE-Harness framework.
+LLM-based Crystal Structure Generation and Optimization for Materials Discovery, integrated with the SDE-Harness framework. MatLLMSearch uses evolution-guided large language models to generate novel crystal structures and optimize them for stability and mechanical properties.
 
-## Overview
+## Original Code Repository
+[https://github.com/JingruG/MatLLMSearch](https://github.com/JingruG/MatLLMSearch)
 
-MatLLMSearch leverages large language models to generate novel crystal structures and optimize them for materials properties. This implementation is integrated with the SDE-Harness framework to provide a standardized workflow for scientific discovery.
+Paper: [MatLLMSearch: Crystal Structure Discovery with Evolution-Guided Large Language Models](https://arxiv.org/abs/2502.20933)
 
-## Features
+## 📦 Install
 
-- **Crystal Structure Generation (CSG)**: Generate novel crystal structures using evolutionary algorithms guided by LLMs
-- **Crystal Structure Prediction (CSP)**: Predict ground state structures for target compounds  
-- **Multi-objective optimization**: Optimize for stability (E_hull distance) and mechanical properties (bulk modulus)
-- **Multiple LLM support**: Local models, OpenAI GPT, and DeepSeek
-- **Structure validation**: Automated validation of generated structures
-- **Comprehensive analysis**: Built-in analysis tools for experimental results
+1. Get to the project folder:
+   ```bash
+   cd projects/matllmsearch
+   ```
 
-## Installation
+2. Install the SDE-Harness framework (from the repo root):
+   ```bash
+   cd ../..
+   pip install -e .
+   cd projects/matllmsearch
+   ```
 
-1. Install the SDE-Harness framework (from parent directory):
-```bash
-cd ../..
-pip install -e .
-```
+3. Set up the conda environment:
+   ```bash
+   conda env create -f environment.yml
+   conda activate ScienceBench_MatLLMSearch
+   ```
 
-2. Install MatLLMSearch dependencies:
-```bash
-cd projects/matllmsearch
-pip install -r requirements.txt
-```
+4. Configure models and credentials in the repo-root `config/` directory.
+   These files are git-ignored so your keys never get committed:
+   ```bash
+   cd ../..
+   cp config/models.template.yaml config/models.yaml
+   cp config/credentials.template.yaml config/credentials.yaml
+   cd projects/matllmsearch
+   ```
+   Then add your API key(s). Either paste the key directly into
+   `config/credentials.yaml`:
+   ```yaml
+   openai:
+     api_key: sk-...
+   ```
+   Or reference an environment variable (recommended on shared servers, keeps
+   the key out of any file):
+   ```yaml
+   openai:
+     api_key: ${OPENAI_API_KEY}
+   ```
+   ```bash
+   export OPENAI_API_KEY="your-api-key-here"
+   ```
+   Other providers (Anthropic, DeepSeek, xAI, Gemini, AWS Bedrock, ...) are
+   supported the same way — see `config/models.template.yaml` and
+   `config/credentials.template.yaml`. Any model passed to `--model` must be
+   defined in `config/models.yaml`. Example for Bedrock:
+   ```yaml
+   # config/models.yaml
+   bedrock/claude-sonnet-4-5:
+     provider: bedrock
+     model: us.anthropic.claude-sonnet-4-5-20250929-v1:0
+     credentials: bedrock
 
-3. Configure models and credentials in the main SDE-Harness config directory:
+   # config/credentials.yaml
+   bedrock:
+     aws_access_key_id: ${AWS_ACCESS_KEY_ID}
+     aws_secret_access_key: ${AWS_SECRET_ACCESS_KEY}
+     aws_region_name: ${AWS_REGION_NAME}
+   ```
 
-4. Download required data files:
-```bash
-# Create data directory
-mkdir -p data
+5. Download required data files:
+   ```bash
+   # Phase diagram data (required for E_hull / stability calculations)
+   wget -O data/2023-02-07-ppd-mp.pkl.gz https://figshare.com/ndownloader/files/48241624
 
-# Download seed structures (optional - enables few-shot generation)
-# You may download data/band_gap_processed.csv at https://drive.google.com/file/d/1DqE9wo6dqw3aSLEfBx-_QOdqmtqCqYQ5/view?usp=sharing
-# Or data/band_gap_processed_5000.csv at https://drive.google.com/file/d/14e5p3EoKzOHqw7hKy8oDsaGPK6gwhnLV/view?usp=sharing
+   # Seed structures (optional - enables few-shot generation)
+   # data/band_gap_processed_5000.csv:
+   #   https://drive.google.com/file/d/14e5p3EoKzOHqw7hKy8oDsaGPK6gwhnLV/view?usp=sharing
+   ```
 
-# Download phase diagram data (required for E_hull distance calculations)
-wget -O data/2023-02-07-ppd-mp.pkl.gz https://figshare.com/ndownloader/files/48241624
-```
+6. (Optional) Run the smoke test (no GPU / API key required):
+   ```bash
+   python test.py
+   ```
 
-**Note**: 
-- All configuration is managed through the main SDE-Harness implementation
-- MatLLMSearch-specific models are configured in `config/models.yaml`
-- API keys are configured in `config/credentials.yaml` 
+## 🖥️ Hardware
 
-## Quick Start
+- **LLM generation** with **API models** (e.g. `openai/gpt-5-mini`, `deepseek/deepseek-reasoner`) runs remotely and needs **no local GPU**.
+- **LLM generation** with **local Hugging Face models** (e.g. `meta-llama/Meta-Llama-3.1-70B-Instruct`) requires a **local GPU**.
+- **Stability evaluation** (CHGNet/M3GNet relaxation) runs on **GPU (recommended)** or **CPU**. Use `--device cuda` or `--device cpu`.
+
+## 🎯 Usage
 
 ### Crystal Structure Generation (CSG)
 Generate novel crystal structures using evolutionary optimization:
 
 ```bash
 python cli.py csg \
-    --model meta-llama/Meta-Llama-3.1-70B-Instruct \
+    --model openai/gpt-5-mini \
     --population-size 100 \
     --max-iter 10 \
     --opt-goal e_hull_distance \
@@ -70,44 +110,33 @@ Predict ground state structures for a target compound:
 ```bash
 python cli.py csp \
     --compound Ag6O2 \
-    --model meta-llama/Meta-Llama-3.1-70B-Instruct \
+    --model openai/gpt-5-mini \
     --population-size 10 \
     --max-iter 5 \
     --save-label ag6o2_prediction
 ```
 
 ### Analysis
-The `analyze` command evaluates generated structures and computes comprehensive metrics including:
-- Structural validity and composition validity
-- Structural diversity and composition diversity
-- Structural novelty and composition novelty (vs reference pool)
-- Overall novelty (fraction of structures that are both compositionally and structurally novel)
-- M3GNet metastability
-- Stability rates (CHGNet)
+Evaluate generated structures and compute validity, diversity, novelty, and stability metrics.
 
-#### Evaluate Existing Results
-
-**Option 1: From a CSV file**
+**From a CSV file:**
 ```bash
 python cli.py analyze \
     --input data/llama_test.csv \
     --output evaluation_results.json \
-    --data-path data/band_gap_processed_5000.csv
+    --data-path data/band_gap_processed_5000.csv \
+    --device cuda
 ```
 
-**Option 2: From a previous CSG run directory**
+**From a previous CSG run directory:**
 ```bash
 python cli.py analyze \
-    --results-path logs/analyze_generation \
+    --results-path logs/csg_experiment \
     --output reevaluated_results.json \
     --data-path data/band_gap_processed_5000.csv
 ```
-This will look for `generations.csv` in the specified results path.
 
-#### Generate and Evaluate via API
-
-Generate structures using the CSG evolutionary workflow with API models and then evaluate:
-
+**Generate via API and evaluate:**
 ```bash
 python cli.py analyze --generate \
     --model openai/gpt-5-mini \
@@ -119,97 +148,69 @@ python cli.py analyze --generate \
     --output gpt5_results.json
 ```
 
-**Key parameters for API generation:**
-- `--generate`: Flag to enable API generation (uses CSG workflow)
-- `--model`: Model to use (e.g., `openai/gpt-5-mini`, `openai/gpt-4o-mini`)
-- `--data-path`: Path to seed structures CSV (used as reference pool for novelty)
-- `--max-iter`: Number of evolutionary iterations
-- `--population-size`: Initial population size
-- `--reproduction-size`: Number of offspring per generation
-- `--parent-size`: Number of parent structures per group
-
-**Note:** All generated structures are kept and deduplicated after all iterations complete before evaluation.
-
-#### Finding Results from Previous Runs
-
-When you run `analyze --generate`, the CSG workflow saves intermediate results to:
-- `logs/analyze_generation/generations.csv`: All generated structures with properties
-- `logs/analyze_generation/metrics.csv`: Per-iteration metrics
-
-The final evaluation summary is saved to the `--output` file you specify (e.g., `gpt5_results.json`).
-
-To re-evaluate a previous run:
+### View Help
 ```bash
-python cli.py analyze \
-    --results-path logs/analyze_generation \
-    --output new_evaluation.json \
-    --data-path data/band_gap_processed_5000.csv
+python cli.py --help
+python cli.py csg --help
 ```
 
-## Configuration Options
+## Common Parameters
 
-### Models
-MatLLMSearch now uses SDE-Harness unified model interface with support for:
-- **Local models**: Llama, Mistral, and other Hugging Face models
-- **OpenAI**: GPT-4o, GPT-4o-mini, GPT-3.5-turbo
+- `--model`: Model to use (e.g. `openai/gpt-5-mini`, `deepseek/deepseek-reasoner`). Must be defined in `config/models.yaml`.
+- `--population-size`: Population size for the evolutionary loop (default: 100)
+- `--reproduction-size`: Number of offspring per generation (default: 5)
+- `--parent-size`: Number of parent structures per group (default: 2)
+- `--max-iter`: Maximum number of evolutionary iterations
+- `--opt-goal`: `e_hull_distance` (stability), `bulk_modulus_relaxed`, or `multi-obj`
+- `--fmt`: Structure format, `poscar` or `cif` (default: poscar)
+- `--data-path`: Path to seed structures CSV (also the reference pool for novelty)
+- `--device`: `cuda` or `cpu` (default: cuda)
+- `--seed`: Random seed (default: 42)
 
-Model configuration is handled via the main SDE-Harness `config/models.yaml` and `config/credentials.yaml` files.
+## 🏗️ Project Structure
 
-### Optimization Goals
-- `e_hull_distance`: Minimize energy above convex hull (stability)
-- `bulk_modulus_relaxed`: Maximize bulk modulus (mechanical properties)
-- `multi-obj`: Multi-objective optimization combining both
+```
+projects/matllmsearch/
+├── cli.py                          # Command line entry point
+├── src/
+│   ├── modes/
+│   │   ├── csg.py                  # Crystal Structure Generation mode
+│   │   ├── csp.py                  # Crystal Structure Prediction mode
+│   │   └── analyze.py              # Analysis mode
+│   ├── utils/
+│   │   ├── structure_generator.py  # LLM-based structure generator
+│   │   ├── stability_calculator.py # CHGNet/M3GNet stability evaluation
+│   │   ├── materials_oracle.py     # Materials property oracle (SDE-Harness Oracle)
+│   │   ├── evaluate_structures.py  # Validity / diversity / novelty / SUN metrics
+│   │   ├── e_hull_calculator.py    # Energy-above-hull calculation
+│   │   ├── data_loader.py          # Data loading utilities
+│   │   └── config.py               # Prompt templates
+├── data/                           # Data files (downloaded separately)
+├── environment.yml                 # Conda environment
+├── test.py                         # Smoke test (no GPU / API key)
+├── requirements.txt
+└── README.md                       # This document
 
-### Structure Formats
-- `poscar`: VASP POSCAR format
-- `cif`: Crystallographic Information File format
+# Model / credential configuration lives in the repo-root config/ directory:
+#   ../../config/models.yaml
+#   ../../config/credentials.yaml
+```
 
 ## Architecture
 
-MatLLMSearch is **fully integrated** with SDE-Harness core components:
+MatLLMSearch is integrated with SDE-Harness core components:
 
-### **Materials-Specific Components**
-- **StructureGenerator**: Uses Generation class for LLM-based structure creation
-- **MaterialsOracle**: Evaluates structures using CHGNet/ORB for stability and properties
-- **StabilityCalculator**: DFT surrogate models for energy and mechanical property prediction
-
-## File Structure
-
-```
-matllmsearch/
-├── cli.py                          # Main command-line interface
-# Configuration files are in the main SDE-Harness config/ directory:
-# ../../config/models.yaml           # Model configurations
-# ../../config/credentials.yaml      # API credentials
-├── data/                           # Data files directory
-│   ├── band_gap_processed_5000.csv     # Seed structures (optional)
-│   └── 2023-02-07-ppd-mp.pkl.gz   # Phase diagram data (required)
-├── src/
-│   ├── modes/
-│   │   ├── csg.py                 # Crystal Structure Generation mode
-│   │   ├── csp.py                 # Crystal Structure Prediction mode  
-│   │   └── analyze.py             # Analysis mode
-│   ├── utils/
-│   │   ├── structure_generator.py  # LLM-based structure generator
-│   │   ├── stability_calculator.py # Structure stability evaluation
-│   │   ├── materials_oracle.py    # Materials property oracle
-│   │   ├── data_loader.py         # Data loading utilities
-│   │   └── config.py              # Configuration and prompts
-├── requirements.txt
-└── README.md
-```
+- **StructureGenerator**: Uses the SDE-Harness `Generation` class for LLM-based structure creation.
+- **MaterialsOracle**: Subclasses the SDE-Harness `Oracle` to evaluate structures with CHGNet/M3GNet for stability and mechanical properties.
+- **StabilityCalculator**: ML interatomic potentials for energy and mechanical property prediction.
 
 ## Evaluation Measurements
 
-Crystal structure discovery. Each experiment began with an initial population of $100$ groups of parents ($100 \times 2 = 200$ parent structures), seeded from the MatBench-bandgap dataset selected with lowest deformation energy by CHGNet. The mutation and crossover operations for LLMs were implemented by prompting the LLMs with two sampled parent structures based on their fitness values (minimizing $E_\text{d}$) and querying them to propose $5$ new structures either through mutation of one structure or crossover of both structures. After generating new offspring in each generation, we evaluated the new offspring and merged their evaluations with the parent evaluations from the previous iteration. The merged pool of parents and children were then ranked by their fitness values (minimizing $E_\text{d}$), and the top-$100 \times 2$ candidates were kept in the population as the pool for the next iteration. We evaluate generated structures through metrics that assess validity, diversity, novelty, and stability. Structural validity checks three-dimensional periodicity, positive lattice volume, and valid atomic positions. Composition validity verifies positive element counts and reasonable number of elements ($\leq 10$). Structural diversity is computed by deduplicating the generated set using pymatgen's StructureMatcher algorithm, then calculating the ratio of unique structures to total generated. Composition diversity measures the fraction of distinct chemical compositions. For novelty assessment, we compare generated structures against the initial reference pool. Composition novelty identifies structures whose reduced formulas are absent from the reference set. Structural novelty is determined by grouping reference structures by formula, then for each generated structure with a matching formula, using StructureMatcher to check if it matches any reference structure with the same composition; unmatched structures are considered structurally novel. Stability evaluation uses CHGNet to relax structures and compute formation energy, then calculates energy above the convex hull ($E_\text{d}$) via a pre-computed patched phase diagram database. We report metastability rates at three thresholds: $E_\text{d} < 0.0$ eV/atom (thermodynamically stable), $E_\text{d} < 0.03$ eV/atom (highly metastable), and $E_\text{d} < 0.10$ eV/atom (M3GNet metastability criterion). The integrated SUN (Structures Unique and Novel) score combines stability and novelty: (1) filter to structures with $E_\text{d} < 0.0$ eV/atom; (2) identify unique structures within this stable subset using pymatgen's Structure.matches with scaling enabled; (3) check novelty against the reference pool; (4) compute SUN score as the number of structures simultaneously stable, unique, and novel, divided by the total number of generated structures.
+Crystal structure discovery. Each experiment began with an initial population of 100 groups of parents (100 × 2 = 200 parent structures), seeded from the MatBench-bandgap dataset selected with lowest deformation energy by CHGNet. The mutation and crossover operations for LLMs were implemented by prompting the LLMs with two sampled parent structures based on their fitness values (minimizing $E_\text{d}$) and querying them to propose 5 new structures either through mutation of one structure or crossover of both structures. After generating new offspring in each generation, we evaluated the new offspring and merged their evaluations with the parent evaluations from the previous iteration. The merged pool of parents and children were then ranked by their fitness values (minimizing $E_\text{d}$), and the top-100 × 2 candidates were kept in the population as the pool for the next iteration. We evaluate generated structures through metrics that assess validity, diversity, novelty, and stability. Structural validity checks three-dimensional periodicity, positive lattice volume, and valid atomic positions. Composition validity verifies positive element counts and reasonable number of elements ($\leq 10$). Structural diversity is computed by deduplicating the generated set using pymatgen's StructureMatcher algorithm, then calculating the ratio of unique structures to total generated. Composition diversity measures the fraction of distinct chemical compositions. For novelty assessment, we compare generated structures against the initial reference pool. Composition novelty identifies structures whose reduced formulas are absent from the reference set. Structural novelty is determined by grouping reference structures by formula, then for each generated structure with a matching formula, using StructureMatcher to check if it matches any reference structure with the same composition; unmatched structures are considered structurally novel. Stability evaluation uses CHGNet to relax structures and compute formation energy, then calculates energy above the convex hull ($E_\text{d}$) via a pre-computed patched phase diagram database. We report metastability rates at three thresholds: $E_\text{d} < 0.0$ eV/atom (thermodynamically stable), $E_\text{d} < 0.03$ eV/atom (highly metastable), and $E_\text{d} < 0.10$ eV/atom (M3GNet metastability criterion). The integrated SUN (Structures Unique and Novel) score combines stability and novelty: (1) filter to structures with $E_\text{d} < 0.0$ eV/atom; (2) identify unique structures within this stable subset using pymatgen's Structure.matches with scaling enabled; (3) check novelty against the reference pool; (4) compute SUN score as the number of structures simultaneously stable, unique, and novel, divided by the total number of generated structures.
 
 ## Results
 
-Comparison of different methods on crystal structure generation:
-**Note:** All LLM models were tested with `temperature: 1.0` and `max_tokens: 8000`.
-
-
-Consider parents and children to form next generation: 
+Comparison of different methods on crystal structure generation. All LLM models were tested with `temperature: 1.0` and `max_tokens: 8000`. Parents and children are merged to form the next generation:
 
 | Method | Structural Validity(%) | Comp Validity(%) | Metastability (E_d < 0.1 eV/atom, %) | Metastability (E_d < 0.0 eV/atom, %) | Sun Rate(%) |
 |--------|---------------------|---------------|-----------------------------------|-----------------------------------|----------|
@@ -221,21 +222,43 @@ Consider parents and children to form next generation:
 | Claude Sonnet 4.5 | 100 | 100 | 78.71 | 50.21 | 38.99 |
 | DeepSeek Reasoner | 100 | 100 | 88.90 | 61.22 | 48.25 |
 | Grok-4 | 100 | 100 | 87.13 | 60.29 | 49.80 |
+
 ## Output
 
-Results are saved in the specified log directory with the following structure:
+Results are saved in the specified log directory:
 
-### CSG Workflow Output (when using `--generate` or `csg` command):
+### CSG / CSP Output
 - `generations.csv`: Generated structures with properties for each iteration
 - `metrics.csv`: Optimization metrics over iterations
+- `token_usage_summary.json`: Token usage summary
 
-### Analysis Output (when using `analyze` command):
-- `evaluation_results.json` (or file specified by `--output`): Comprehensive evaluation results including:
-  - Validity metrics (structural, composition)
-  - Diversity metrics (structural, composition)
-  - Novelty metrics (overall, composition, structural, SUN score)
-  - Stability metrics (metastability rates, E-hull statistics)
-  - Success rates
+### Analysis Output
+- The file specified by `--output`: comprehensive evaluation results, including validity, diversity, novelty (with SUN score), and stability metrics.
+
+## 🐛 Troubleshooting
+
+1. **`Models configuration file not found` / `Credentials file not found`**
+   ```bash
+   cp config/models.template.yaml config/models.yaml
+   cp config/credentials.template.yaml config/credentials.yaml
+   # then add your API key(s)
+   ```
+
+2. **`Environment variable ... is not set`** (when using `${VAR}` in credentials.yaml)
+   ```bash
+   export OPENAI_API_KEY="your-actual-key"
+   ```
+
+3. **Missing phase diagram file** (E_hull calculation fails)
+   ```bash
+   wget -O data/2023-02-07-ppd-mp.pkl.gz https://figshare.com/ndownloader/files/48241624
+   ```
+
+4. **No GPU available**
+   ```bash
+   # Use an API model for generation and run evaluation on CPU
+   python cli.py analyze --input data/llama_test.csv --device cpu --output eval.json
+   ```
 
 ## Citation
 
@@ -243,12 +266,12 @@ If you use MatLLMSearch in your research, please cite:
 
 ```bibtex
 @misc{gan2025matllmsearch,
-      title={MatLLMSearch: Crystal Structure Discovery with Evolution-Guided Large Language Models}, 
+      title={MatLLMSearch: Crystal Structure Discovery with Evolution-Guided Large Language Models},
       author={Jingru Gan and Peichen Zhong and Yuanqi Du and Yanqiao Zhu and Chenru Duan and Haorui Wang and Daniel Schwalbe-Koda and Carla P. Gomes and Kristin A. Persson and Wei Wang},
       year={2025},
       eprint={2502.20933},
       archivePrefix={arXiv},
       primaryClass={cond-mat.mtrl-sci},
-      url={https://arxiv.org/abs/2502.20933}, 
+      url={https://arxiv.org/abs/2502.20933},
 }
 ```

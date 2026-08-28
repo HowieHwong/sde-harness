@@ -80,13 +80,11 @@ class StructureGenerator:
                 "max_tokens": max_tokens
             }
         
-        # Initialize SDE-Harness Prompt templates
         self._init_prompt_templates()
-    
+
     def _init_prompt_templates(self) -> None:
         """Initialize SDE-Harness Prompt templates"""
-        
-        # CSG Zero-shot template
+        # CSG zero-shot template
         self.csg_zeroshot_prompt = Prompt(
             custom_template=PROMPT_PATTERN_CSG_ZEROSHOT,
             default_vars={
@@ -103,7 +101,7 @@ class StructureGenerator:
                 "rep_size": 5
             }
         )
-        
+
         # CSP template
         self.csp_prompt = Prompt(
             custom_template=PROMPT_PATTERN_CSP,
@@ -116,18 +114,14 @@ class StructureGenerator:
     
     def generate(self, parent_structures: List[Structure], num_offspring: int = 5) -> List[Structure]:
         """Generate new structures based on parent structures"""
-        
         if not parent_structures or len(parent_structures) == 0:
-            # Zero-shot generation using SDE-Harness Prompt
             zeroshot_instruction = self.csg_zeroshot_prompt.build()
             instructions = [zeroshot_instruction] * self.args.population_size
             input_groups = []  # No parent groups for zero-shot
         else:
-            # Prepare input structures for prompting
             input_groups = self._group_structures(parent_structures)
             instructions = self._prepare_instructions_with_prompt(input_groups, num_offspring)
-        
-        # Generate responses using SDE-Harness Generation
+
         responses = []
         token_usage_list = []
         
@@ -140,8 +134,7 @@ class StructureGenerator:
                 )
                 response_text = result.get("text", "") if isinstance(result, dict) else str(result)
                 responses.append(response_text)
-                
-                # Extract token usage
+
                 if isinstance(result, dict) and "usage" in result:
                     usage = result["usage"]
                     if usage is not None:
@@ -184,22 +177,20 @@ class StructureGenerator:
                 })
         
         self._last_token_usage = token_usage_list
-        
-        # Parse structures from responses and track parent groups
+
+        # Parse structures and tag each with its originating parent group
+        # (None for zero-shot). csg.py reads _last_parent_groups afterwards.
         structures = []
-        parent_groups_list = []  # Track which parent group each structure came from
-        
+        parent_groups_list = []
+
         for i, response in enumerate(responses):
             response_structures = self._parse_single_response(response)
             structures.extend(response_structures)
-            
-            # Associate each structure from this response with its parent group
-            # For zero-shot (no input_groups), parent_group is None
+
             parent_group = input_groups[i] if input_groups and i < len(input_groups) else None
             for _ in response_structures:
                 parent_groups_list.append(parent_group)
-        
-        # Store parent groups for later use in csg.py
+
         self._last_parent_groups = parent_groups_list
         
         return structures
@@ -220,10 +211,8 @@ class StructureGenerator:
         instructions = []
         
         for group in input_groups:
-            # Convert structures to JSON format
             input_json = self._structures_to_json(group)
-            
-            # Select appropriate prompt template and build instruction
+
             if self.task == "csg":
                 self.csg_prompt.add_vars(
                     input=input_json,
@@ -239,13 +228,12 @@ class StructureGenerator:
                 instruction = self.csp_prompt.build()
                 
             else:
-                # Default to CSG
                 self.csg_prompt.add_vars(
                     input=input_json,
                     rep_size=num_offspring
                 )
                 instruction = self.csg_prompt.build()
-            
+
             instructions.append(instruction)
         
         return instructions
@@ -333,19 +321,17 @@ class StructureGenerator:
         
         for match in matches:
             try:
-                # Extract and clean the structure content
+                # Unescape the JSON-embedded structure string
                 structure_content = match.group(1)
-                
                 structure_content = structure_content.replace('\\\\n', '\n')
                 structure_content = structure_content.replace('\\n', '\n')
                 structure_content = structure_content.replace('\\"', '"')
                 structure_content = structure_content.replace('\\\\', '\\')
-                
-                # Fix POSCAR:reconstruct atom counts from actual coordinates
+
+                # Reconstruct POSCAR atom counts from the actual coordinate lines
                 if self.fmt.lower() == 'poscar':
                     structure_content = self._fix_poscar_counts(structure_content)
-                
-                # Try to parse as Structure
+
                 structure = Structure.from_str(structure_content, fmt=self.fmt)
                 if self._validate_structure(structure):
                     structures.append(structure)

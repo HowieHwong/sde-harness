@@ -9,9 +9,46 @@ from pymatgen.core.structure import Structure
 from pymatgen.core.composition import Composition
 
 
-def validate_data_files() -> bool:
-    """Validate that required data files exist"""
-    return True
+def validate_data_files(data_path: str = None, ppd_path: str = None,
+                        require_data: bool = False) -> bool:
+    """Validate that required data files exist and are readable.
+
+    Args:
+        data_path: Path to the seed structures CSV (reference pool). Optional.
+        ppd_path: Path to the patched phase diagram file (required for E_hull).
+        require_data: If True, a missing seed CSV is treated as an error.
+
+    Returns:
+        True if all checked files are present and readable, else False.
+    """
+    ok = True
+
+    if ppd_path is not None:
+        if not Path(ppd_path).exists():
+            print(f"Error: Phase diagram file not found: {ppd_path}")
+            print("  Download it with:")
+            print("  wget -O data/2023-02-07-ppd-mp.pkl.gz "
+                  "https://figshare.com/ndownloader/files/48241624")
+            ok = False
+
+    if data_path is not None:
+        if not Path(data_path).exists():
+            msg = f"seed structures file not found: {data_path}"
+            if require_data:
+                print(f"Error: {msg}")
+                ok = False
+            else:
+                print(f"Warning: {msg} (proceeding with zero-shot generation)")
+        else:
+            try:
+                pd.read_csv(data_path, nrows=1)
+            except Exception as e:
+                print(f"Error: could not read seed structures file {data_path}: {e}")
+                ok = False
+
+    if ok:
+        print("✅ Data files validated successfully")
+    return ok
 
 
 def load_seed_structures(data_path: str = "data/band_gap_processed_5000.csv", 

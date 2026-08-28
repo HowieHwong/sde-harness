@@ -7,10 +7,8 @@ import numpy as np
 from pathlib import Path
 from typing import Dict, Any
 
-# Add sde_harness to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', '..'))
 
-# from sde_harness.core import Generation, Oracle, Workflow
 from sde_harness.base import ProjectBase
 from ..utils.materials_oracle import MaterialsOracle
 from ..utils.data_loader import load_seed_structures
@@ -23,8 +21,7 @@ class MatLLMSearchCSG:
     def __init__(self, args):
         """Initialize MatLLMSearch CSG"""
         self.args = args
-        
-        # Initialize structure generator
+
         self.structure_generator = StructureGenerator(
             model=self.args.model,
             temperature=self.args.temperature,
@@ -33,30 +30,27 @@ class MatLLMSearchCSG:
             task="csg",
             args=self.args
         )
-        
-        # Initialize materials oracle
+
         self.oracle = MaterialsOracle(
             opt_goal=self.args.opt_goal,
-            mlip="chgnet" if self.args.opt_goal == "e_hull_distance" else "orb-v3"
+            mlip="chgnet",
+            device=getattr(self.args, "device", "cuda")
         )
     
     def run(self, **kwargs) -> Dict[str, Any]:
         """Run the CSG workflow"""
         print(f"Starting Crystal Structure Generation with {self.args.model}")
         print(f"Population size: {self.args.population_size}, Max iterations: {self.args.max_iter}")
-        
-        # Load seed structures
+
         seed_structures = load_seed_structures(
             data_path=self.args.data_path,
             task="csg",
             random_seed=self.args.seed
         )
-        
-        # Set random seed
+
         random.seed(self.args.seed)
         np.random.seed(self.args.seed)
-        
-        # Run custom workflow
+
         results = self._run_evolutionary_workflow(seed_structures)
         
         return results
@@ -66,14 +60,11 @@ class MatLLMSearchCSG:
         from pathlib import Path
         import pandas as pd
         import json
-        
-        # Create output directory
+
         output_path = Path(self.args.log_dir) / self.args.save_label
         output_path.mkdir(parents=True, exist_ok=True)
-        
-        # Initialize population
+
         initial_structures = seed_structures[:self.args.population_size * self.args.parent_size] if seed_structures else []
-        # Evaluate initial population and store evaluations
         if initial_structures:
             print(f"Evaluating initial population of {len(initial_structures)} structures...")
             current_evaluations = self.oracle.evaluate(initial_structures)
@@ -88,8 +79,7 @@ class MatLLMSearchCSG:
         
         for iteration in range(self.args.max_iter):
             print(f"=== Iteration {iteration + 1}/{self.args.max_iter} ===")
-            
-            # Generate offspring from current population structures
+
             current_population_structures = [e.structure for e in current_evaluations] if current_evaluations else []
             if current_population_structures:
                 print(f"Generating {self.args.population_size} * {self.args.reproduction_size} offspring from {len(current_population_structures)} parents")
@@ -105,8 +95,7 @@ class MatLLMSearchCSG:
                 )
             
             print(f"Generated {len(new_structures)} new structures")
-            
-            # Track token usage for this iteration
+
             iteration_input_tokens = 0
             iteration_output_tokens = 0
             iteration_total_tokens = 0
@@ -127,15 +116,13 @@ class MatLLMSearchCSG:
                 print("No valid structures generated, ending optimization")
                 break
             
-            # Evaluate new structures (children)
             print("Evaluating new structures...")
             child_evaluations = self.oracle.evaluate(new_structures)
-            
-            # Merge parent evaluations and child evaluations
+
             all_evaluations = current_evaluations + child_evaluations
             print(f"Merged {len(current_evaluations)} parent evaluations with {len(child_evaluations)} child evaluations")
-            
-            # Get token usage per structure (distribute iteration tokens across structures)
+
+            # Distribute iteration token totals across structures
             num_structures = len(new_structures)
             tokens_per_structure = {
                 "input": iteration_input_tokens // num_structures if num_structures > 0 else 0,
@@ -143,17 +130,14 @@ class MatLLMSearchCSG:
                 "total": iteration_total_tokens // num_structures if num_structures > 0 else 0
             }
             
-            # Get parent groups for each structure (if available)
             parent_groups = getattr(self.structure_generator, '_last_parent_groups', [None] * num_structures)
-            
-            # Save generation data (only for new children)
+
+            # Record only the new children this iteration
             generation_data = []
             for i, (structure, evaluation) in enumerate(zip(new_structures, child_evaluations)):
                 if structure and evaluation:
-                    # Get parent group for this structure
                     parent_group = parent_groups[i] if i < len(parent_groups) else None
-                    
-                    # Serialize parent structures to JSON
+
                     parents_json = None
                     if parent_group is not None and len(parent_group) > 0:
                         parents_dict = [parent.as_dict() for parent in parent_group if parent is not None]
@@ -175,8 +159,7 @@ class MatLLMSearchCSG:
                     })
             
             all_generations.extend(generation_data)
-            
-            # Calculate metrics
+
             metrics = self.oracle.get_metrics(all_evaluations)
             metrics['iteration'] = iteration + 1
             metrics['input_tokens'] = iteration_input_tokens
@@ -185,18 +168,18 @@ class MatLLMSearchCSG:
             all_metrics.append(metrics)
             
             print(f"Metrics: {metrics}")
-            
-            # Update population (select best structures from parents + children)
+
+            # Select next generation from the merged parent + child pool
             valid_evaluations = [e for e in all_evaluations if e.valid]
             if valid_evaluations:
                 ranked_evaluations = self.oracle.rank_structures(valid_evaluations, ascending=True)
-                # Keep top population_size * parent_size (100 * 2 = 200)
+                # Keep top population_size * parent_size (e.g. 100 * 2 = 200)
                 current_evaluations = ranked_evaluations[:self.args.population_size * self.args.parent_size]
                 print(f"Updated population: {len(current_evaluations)} structures (top {self.args.population_size * self.args.parent_size} from {len(valid_evaluations)} valid)")
             else:
                 print("No valid structures found, keeping previous population")
-            
-            # Incremental save after each iteration
+
+            # Append to on-disk backups after every iteration
             generations_backup_file = output_path / "generations_backup.csv"
             metrics_backup_file = output_path / "metrics_backup.csv"
             
@@ -210,16 +193,14 @@ class MatLLMSearchCSG:
                 metrics_df.to_csv(metrics_backup_file, mode='a', header=not metrics_backup_file.exists(), index=False)
                 print(f"Incremental backup: Appended iteration {iteration + 1} metrics to metrics_backup.csv")
         
-        # Final save results
         if all_generations:
             generations_df = pd.DataFrame(all_generations)
             generations_df.to_csv(output_path / "generations.csv", index=False)
-        
+
         if all_metrics:
             metrics_df = pd.DataFrame(all_metrics)
             metrics_df.to_csv(output_path / "metrics.csv", index=False)
-        
-        # Print total token usage summary
+
         print(f"\n{'='*60}")
         print("Token Usage Summary")
         print(f"{'='*60}")
@@ -227,8 +208,7 @@ class MatLLMSearchCSG:
         print(f"Total Output Tokens: {total_output_tokens:,}")
         print(f"Total Tokens: {total_tokens:,}")
         print(f"{'='*60}\n")
-        
-        # Save token usage summary
+
         token_summary = {
             "total_input_tokens": total_input_tokens,
             "total_output_tokens": total_output_tokens,
@@ -254,9 +234,6 @@ class MatLLMSearchCSG:
 
 def run_csg(args) -> Dict[str, Any]:
     """Run Crystal Structure Generation mode"""
-    
-    # Create and run MatLLMSearch CSG project
     project = MatLLMSearchCSG(args=args)
     results = project.run()
-    
     return results

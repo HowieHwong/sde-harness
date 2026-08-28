@@ -7,7 +7,6 @@ import numpy as np
 from pathlib import Path
 from typing import Dict, Any
 
-# Add sde_harness to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', '..'))
 
 from ..utils.materials_oracle import MaterialsOracle
@@ -22,8 +21,7 @@ class MatLLMSearchCSP:
     def __init__(self, args):
         """Initialize MatLLMSearch CSP"""
         self.args = args
-        
-        # Initialize structure generator for CSP
+
         self.structure_generator = StructureGenerator(
             model=self.args.model,
             temperature=self.args.temperature,
@@ -32,11 +30,11 @@ class MatLLMSearchCSP:
             task="csp",
             args=self.args
         )
-        
-        # Initialize materials oracle
+
         self.oracle = MaterialsOracle(
             opt_goal="e_hull_distance",
-            mlip="orb-v3"
+            mlip="chgnet",
+            device=getattr(self.args, "device", "cuda")
         )
     
     def run(self, **kwargs) -> Dict[str, Any]:
@@ -45,14 +43,11 @@ class MatLLMSearchCSP:
         print(f"Model: {self.args.model}")
         print(f"Population size: {self.args.population_size}, Max iterations: {self.args.max_iter}")
         
-        # Load and filter seed structures for target compound
         seed_structures = self._load_target_compound_structures()
-        
-        # Set random seed
+
         random.seed(self.args.seed)
         np.random.seed(self.args.seed)
-        
-        # Run CSP workflow
+
         results = self._run_csp_workflow(seed_structures)
         
         return results
@@ -62,12 +57,10 @@ class MatLLMSearchCSP:
         from pathlib import Path
         import pandas as pd
         import json
-        
-        # Create output directory
+
         output_path = Path(self.args.log_dir) / self.args.save_label
         output_path.mkdir(parents=True, exist_ok=True)
-        
-        # Initialize population
+
         initial_structures = seed_structures[:self.args.population_size * getattr(self.args, 'parent_size', 2)] if seed_structures else []
         if initial_structures:
             print(f"Evaluating initial population of {len(initial_structures)} structures...")
@@ -81,7 +74,6 @@ class MatLLMSearchCSP:
         for iteration in range(self.args.max_iter):
             print(f"\n=== Iteration {iteration + 1}/{self.args.max_iter} ===")
             
-            # Generate offspring from current population structures
             current_population_structures = [e.structure for e in current_evaluations] if current_evaluations else []
             if current_population_structures:
                 print(f"Generating {self.args.reproduction_size} offspring from {len(current_population_structures)} parents")
@@ -96,7 +88,7 @@ class MatLLMSearchCSP:
                     num_offspring=self.args.population_size
                 )
             
-            # Filter for target compound composition
+            # Keep only structures matching the target compound
             target_comp = Composition(self.args.compound)
             filtered_structures = []
             for structure in new_structures:
@@ -110,11 +102,10 @@ class MatLLMSearchCSP:
                 print("No structures match target compound, ending optimization")
                 break
             
-            # Evaluate new structures (children)
             print("Evaluating new structures...")
             child_evaluations = self.oracle.evaluate(filtered_structures)
-            
-            # Filter parent evaluations to ensure they match target compound
+
+            # Restrict carried-over parents to the target compound too
             filtered_parent_evaluations = []
             for eval in current_evaluations:
                 try:
@@ -124,11 +115,9 @@ class MatLLMSearchCSP:
                 except Exception:
                     continue
             
-            # Merge filtered parent evaluations and child evaluations
             all_evaluations = filtered_parent_evaluations + child_evaluations
             print(f"Merged {len(filtered_parent_evaluations)} parent evaluations (filtered) with {len(child_evaluations)} child evaluations")
-            
-            # Save generation data (only for new children)
+
             generation_data = []
             for i, (structure, evaluation) in enumerate(zip(filtered_structures, child_evaluations)):
                 if structure and evaluation:
@@ -143,26 +132,23 @@ class MatLLMSearchCSP:
                     })
             
             all_generations.extend(generation_data)
-            
-            # Calculate metrics
+
             metrics = self.oracle.get_metrics(all_evaluations)
             metrics['iteration'] = iteration + 1
             all_metrics.append(metrics)
             
             print(f"Metrics: {metrics}")
-            
-            # Update population (select best structures from parents + children)
+
+            # Select next generation from the merged parent + child pool
             valid_evaluations = [e for e in all_evaluations if e.valid]
             if valid_evaluations:
                 ranked_evaluations = self.oracle.rank_structures(valid_evaluations, ascending=True)
-                # Keep top population_size * parent_size from merged pool
                 parent_size = getattr(self.args, 'parent_size', 2)
                 current_evaluations = ranked_evaluations[:self.args.population_size * parent_size]
                 print(f"Updated population: {len(current_evaluations)} structures (top {self.args.population_size * parent_size} from {len(valid_evaluations)} valid)")
             else:
                 print("No valid structures found, keeping previous population")
         
-        # Save results
         if all_generations:
             generations_df = pd.DataFrame(all_generations)
             generations_df.to_csv(output_path / "generations.csv", index=False)
@@ -183,40 +169,35 @@ class MatLLMSearchCSP:
     
     def _load_target_compound_structures(self):
         """Load seed structures that match the target compound pattern"""
-        
-        # Load all available seed structures
         all_seeds = load_seed_structures(
-            data_path=self.args.data_path,  # Use specified data path
+            data_path=self.args.data_path,
             task="csp",
             random_seed=self.args.seed
         )
-        
+
         if not all_seeds:
             print(f"No seed structures found, using zero-shot generation for {self.args.compound}")
             return []
-        
-        # Filter structures that match the target compound pattern
+
         target_comp = Composition(self.args.compound)
         matching_structures = []
-        
+
         for structure in all_seeds:
             if structure is None:
                 continue
-                
+
             try:
-                # Check if structure has the same unit cell pattern as target
                 if matches_unit_cell_pattern(structure.composition, target_comp):
                     matching_structures.append(structure)
-                # Also include exact composition matches
                 elif matches_composition(structure.composition, target_comp):
                     matching_structures.append(structure)
             except Exception as e:
                 print(f"Error checking structure composition: {e}")
                 continue
-        
+
         print(f"Found {len(matching_structures)} seed structures matching {self.args.compound} pattern")
-        
-        # If no matching structures, use a broader search
+
+        # Fall back to a broader element-count match if nothing matched
         if not matching_structures:
             print(f"No exact matches found, using structures with similar element count")
             target_elem_count = len(target_comp.elements)
@@ -238,14 +219,10 @@ class MatLLMSearchCSP:
 
 def run_csp(args) -> Dict[str, Any]:
     """Run Crystal Structure Prediction mode"""
-    
-    # Validate compound choice
     valid_compounds = ["Ag6O2", "Bi2F8", "Co2Sb2", "Co4B2", "Cr4Si4", "KZnF3", "Sr2O4", "YMg3"]
     if args.compound not in valid_compounds:
         raise ValueError(f"Compound {args.compound} not supported. Choose from: {valid_compounds}")
-    
-    # Create and run MatLLMSearch CSP project
+
     project = MatLLMSearchCSP(args=args)
     results = project.run()
-    
     return results
