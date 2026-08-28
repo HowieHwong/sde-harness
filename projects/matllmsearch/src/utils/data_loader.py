@@ -27,8 +27,8 @@ def validate_data_files(data_path: str = None, ppd_path: str = None,
         if not Path(ppd_path).exists():
             print(f"Error: Phase diagram file not found: {ppd_path}")
             print("  Download it with:")
-            print("  wget -O data/2023-02-07-ppd-mp.pkl.gz "
-                  "https://figshare.com/ndownloader/files/48241624")
+            print("  gdown 16u5rAP_pEjadxQds_RukOfvDJ4nJRZeX "
+                  "-O data/2023-02-07-ppd-mp.pkl.gz")
             ok = False
 
     if data_path is not None:
@@ -51,7 +51,7 @@ def validate_data_files(data_path: str = None, ppd_path: str = None,
     return ok
 
 
-def load_seed_structures(data_path: str = "data/band_gap_processed_5000.csv", 
+def load_seed_structures(data_path: str = "data/band_gap_processed.csv",
                         task: str = "csg", random_seed: int = 42) -> List[Structure]:
     """Load seed structures for initialization"""
     

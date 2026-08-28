@@ -68,14 +68,17 @@ Paper: [MatLLMSearch: Crystal Structure Discovery with Evolution-Guided Large La
      aws_region_name: ${AWS_REGION_NAME}
    ```
 
-5. Download required data files:
+5. Download required data files. The files are hosted on Google Drive; use
+   `gdown` (`pip install gdown`) since `wget` does not handle large Drive files:
    ```bash
-   # Phase diagram data (required for E_hull / stability calculations)
-   wget -O data/2023-02-07-ppd-mp.pkl.gz https://figshare.com/ndownloader/files/48241624
+   mkdir -p data
+   pip install gdown
 
-   # Seed structures (optional - enables few-shot generation)
-   # data/band_gap_processed_5000.csv:
-   #   https://drive.google.com/file/d/14e5p3EoKzOHqw7hKy8oDsaGPK6gwhnLV/view?usp=sharing
+   # Phase diagram data (~700 MB, required for E_hull / stability calculations)
+   gdown 16u5rAP_pEjadxQds_RukOfvDJ4nJRZeX -O data/2023-02-07-ppd-mp.pkl.gz
+
+   # Seed structures (~270 MB, optional - enables few-shot generation)
+   gdown 1DqE9wo6dqw3aSLEfBx-_QOdqmtqCqYQ5 -O data/band_gap_processed.csv
    ```
 
 6. (Optional) Run the smoke test (no GPU / API key required):
@@ -100,7 +103,7 @@ python cli.py csg \
     --population-size 100 \
     --max-iter 10 \
     --opt-goal e_hull_distance \
-    --data-path data/band_gap_processed_5000.csv \
+    --data-path data/band_gap_processed.csv \
     --save-label csg_experiment
 ```
 
@@ -124,7 +127,7 @@ Evaluate generated structures and compute validity, diversity, novelty, and stab
 python cli.py analyze \
     --input data/llama_test.csv \
     --output evaluation_results.json \
-    --data-path data/band_gap_processed_5000.csv \
+    --data-path data/band_gap_processed.csv \
     --device cuda
 ```
 
@@ -133,14 +136,14 @@ python cli.py analyze \
 python cli.py analyze \
     --results-path logs/csg_experiment \
     --output reevaluated_results.json \
-    --data-path data/band_gap_processed_5000.csv
+    --data-path data/band_gap_processed.csv
 ```
 
 **Generate via API and evaluate:**
 ```bash
 python cli.py analyze --generate \
     --model openai/gpt-5-mini \
-    --data-path data/band_gap_processed_5000.csv \
+    --data-path data/band_gap_processed.csv \
     --max-iter 10 \
     --population-size 10 \
     --reproduction-size 5 \
@@ -251,7 +254,7 @@ Results are saved in the specified log directory:
 
 3. **Missing phase diagram file** (E_hull calculation fails)
    ```bash
-   wget -O data/2023-02-07-ppd-mp.pkl.gz https://figshare.com/ndownloader/files/48241624
+   gdown 16u5rAP_pEjadxQds_RukOfvDJ4nJRZeX -O data/2023-02-07-ppd-mp.pkl.gz
    ```
 
 4. **No GPU available**

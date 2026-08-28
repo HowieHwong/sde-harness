@@ -38,7 +38,7 @@ Example usage:
     common_args = argparse.ArgumentParser(add_help=False)
     common_args.add_argument("--log-dir", type=str, default="logs", help="Log directory (default: logs)")
     common_args.add_argument("--seed", type=int, default=42, help="Random seed (default: 42)")
-    common_args.add_argument("--data-path", type=str, default="data/band_gap_processed_5000.csv", help="Path to seed structures data file (default: data/band_gap_processed_5000.csv)")
+    common_args.add_argument("--data-path", type=str, default="data/band_gap_processed.csv", help="Path to seed structures data file (default: data/band_gap_processed.csv)")
     common_args.add_argument("--model", type=str, default="openai/gpt-4o-2024-08-06",
                            help="LLM model to use (must be defined in config/models.yaml)")
     common_args.add_argument("--temperature", type=float, default=1.0, help="Temperature for LLM (default: 1.0)")
@@ -114,8 +114,8 @@ Example usage:
                            help="Max tokens for generation (default: 8000)")
     analyze_parser.add_argument("--fmt", choices=["poscar", "cif"], default="poscar",
                            help="Structure format for generation (default: poscar)")
-    analyze_parser.add_argument("--data-path", type=str, default="data/band_gap_processed_5000.csv",
-                           help="Path to seed structures data file for reference pool (default: data/band_gap_processed_5000.csv)")
+    analyze_parser.add_argument("--data-path", type=str, default="data/band_gap_processed.csv",
+                           help="Path to seed structures data file for reference pool (default: data/band_gap_processed.csv)")
     analyze_parser.add_argument("--max-iter", type=int, default=1,
                            help="Maximum iterations for generation (default: 1)")
     analyze_parser.add_argument("--population-size", type=int, default=None,
