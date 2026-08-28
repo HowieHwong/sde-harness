@@ -66,7 +66,8 @@ class StructureGenerator:
             model_name=model
         )
 
-        is_local_model = model.startswith("local/") or not any(x in model for x in ["openai", "anthropic", "gemini", "deepseek"])
+        api_providers = ["openai", "anthropic", "gemini", "deepseek", "bedrock", "xai", "openrouter", "azure"]
+        is_local_model = model.startswith("local/") or model.startswith("huggingface/") or not any(x in model for x in api_providers)
         
         if is_local_model:
             self.gen_args = {

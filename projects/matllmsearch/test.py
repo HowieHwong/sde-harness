@@ -12,6 +12,10 @@ import os
 import sys
 import unittest
 
+# Run offline so the smoke test never triggers a Weights & Biases / weave login.
+os.environ.setdefault("WEAVE_DISABLED", "true")
+os.environ.setdefault("WANDB_MODE", "disabled")
+
 # Add matllmsearch project root to path (for `src.*` imports)
 matllmsearch_root = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, matllmsearch_root)
@@ -62,9 +66,10 @@ class TestStructureParsing(unittest.TestCase):
     def test_parse_and_validate_poscar(self):
         from src.utils.structure_generator import StructureGenerator
 
+        # Cell volume must stay under the validator's 30 * num_atoms cap.
         poscar = (
             "Na1 Cl1\n1.0\n"
-            "  4.0 0.0 0.0\n  0.0 4.0 0.0\n  0.0 0.0 4.0\n"
+            "  3.5 0.0 0.0\n  0.0 3.5 0.0\n  0.0 0.0 3.5\n"
             "Na Cl\n1 1\ndirect\n"
             "  0.0 0.0 0.0 Na\n  0.5 0.5 0.5 Cl"
         )
