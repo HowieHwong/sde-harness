@@ -123,7 +123,7 @@ def run_analyze(args) -> Dict[str, Any]:
         else:
             training_structures = evaluator.load_structures_from_file(str(training_file), fmt='json')
     else:
-        data_path = getattr(args, 'data_path', 'data/band_gap_processed_5000.csv')
+        data_path = getattr(args, 'data_path', 'data/band_gap_processed.csv')
         print(f"Loading novelty reference structures from reference pool: {data_path}...")
         try:
             training_structures = load_seed_structures(

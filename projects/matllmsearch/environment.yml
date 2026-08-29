@@ -1,0 +1,22 @@
+name: ScienceBench_MatLLMSearch
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11
+  - pip
+  - numpy
+  - pandas
+  - pyyaml
+  - pip:
+    - torch
+    - transformers
+    - pymatgen
+    - chgnet>=0.3.0
+    - matgl>=0.9.0
+    - tqdm
+    - litellm>=1.73.6
+    - weave>=0.51.54
+    - openai>=1.0.0
+    - anthropic>=0.25.0
+    - google-generativeai>=0.3.0

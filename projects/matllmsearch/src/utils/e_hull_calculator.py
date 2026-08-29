@@ -10,8 +10,32 @@ from tqdm import tqdm
 import numpy as np
 
 from pymatgen.core.structure import Structure
+from pymatgen.core.composition import Composition
 from pymatgen.entries.computed_entries import ComputedStructureEntry
 from pymatgen.analysis.phase_diagram import PatchedPhaseDiagram
+
+
+def _install_composition_compat_shim() -> None:
+    """Rebuild cached fields missing on Compositions unpickled from an older
+    pymatgen. The bundled phase diagram was serialized before ``num_atoms``
+    was cached in ``_n_atoms``; without a ``__setstate__`` those objects raise
+    AttributeError on every ``get_e_above_hull`` call. Recompute on access."""
+    if getattr(Composition, "_ehull_compat_shim", False):
+        return
+
+    original_getattr = getattr(Composition, "__getattr__", None)
+
+    def __getattr__(self, name):
+        if name == "_n_atoms":
+            n_atoms = float(sum(abs(v) for v in self._data.values()))
+            object.__setattr__(self, "_n_atoms", n_atoms)
+            return n_atoms
+        if original_getattr is not None:
+            return original_getattr(self, name)
+        raise AttributeError(name)
+
+    Composition.__getattr__ = __getattr__
+    Composition._ehull_compat_shim = True
 
 
 class EHullCalculator:
@@ -73,6 +97,7 @@ class EHullCalculator:
         """Load gzip file (PatchedPhaseDiagram)."""
         if not isinstance(gzip_path, str):
             raise TypeError(f'gzip_path must be a string, but got {type(gzip_path)}')
+        _install_composition_compat_shim()
         with gzip.open(gzip_path, 'rb') as f:
             data = pickle.load(f)
         return data

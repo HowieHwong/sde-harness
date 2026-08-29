@@ -9,12 +9,49 @@ from pymatgen.core.structure import Structure
 from pymatgen.core.composition import Composition
 
 
-def validate_data_files() -> bool:
-    """Validate that required data files exist"""
-    return True
+def validate_data_files(data_path: str = None, ppd_path: str = None,
+                        require_data: bool = False) -> bool:
+    """Validate that required data files exist and are readable.
+
+    Args:
+        data_path: Path to the seed structures CSV (reference pool). Optional.
+        ppd_path: Path to the patched phase diagram file (required for E_hull).
+        require_data: If True, a missing seed CSV is treated as an error.
+
+    Returns:
+        True if all checked files are present and readable, else False.
+    """
+    ok = True
+
+    if ppd_path is not None:
+        if not Path(ppd_path).exists():
+            print(f"Error: Phase diagram file not found: {ppd_path}")
+            print("  Download it with:")
+            print("  gdown 16u5rAP_pEjadxQds_RukOfvDJ4nJRZeX "
+                  "-O data/2023-02-07-ppd-mp.pkl.gz")
+            ok = False
+
+    if data_path is not None:
+        if not Path(data_path).exists():
+            msg = f"seed structures file not found: {data_path}"
+            if require_data:
+                print(f"Error: {msg}")
+                ok = False
+            else:
+                print(f"Warning: {msg} (proceeding with zero-shot generation)")
+        else:
+            try:
+                pd.read_csv(data_path, nrows=1)
+            except Exception as e:
+                print(f"Error: could not read seed structures file {data_path}: {e}")
+                ok = False
+
+    if ok:
+        print("✅ Data files validated successfully")
+    return ok
 
 
-def load_seed_structures(data_path: str = "data/band_gap_processed_5000.csv", 
+def load_seed_structures(data_path: str = "data/band_gap_processed.csv",
                         task: str = "csg", random_seed: int = 42) -> List[Structure]:
     """Load seed structures for initialization"""
     
@@ -49,10 +86,13 @@ def _load_from_bandgap_data(data_path: Path, task: str,
     df = df.dropna(subset=['structure'])
     df['composition'] = [s.composition for s in df['structure']]
     df['composition_len'] = [len(s.composition.elements) for s in df['structure']]
-    
-    # Filter by composition length (3-6 elements for reasonable complexity)
-    df = df[df['composition_len'].between(3, 6)]
-    
+
+    # For CSG, restrict to 3-6 element compounds for reasonable complexity.
+    # CSP targets specific compounds (often binary) and does its own
+    # composition matching downstream, so it must not be pre-filtered here.
+    if task != "csp":
+        df = df[df['composition_len'].between(3, 6)]
+
     # Shuffle to get diverse samples
     df = df.sample(frac=1, random_state=random_seed)
     

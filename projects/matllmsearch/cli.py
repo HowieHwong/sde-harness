@@ -38,11 +38,13 @@ Example usage:
     common_args = argparse.ArgumentParser(add_help=False)
     common_args.add_argument("--log-dir", type=str, default="logs", help="Log directory (default: logs)")
     common_args.add_argument("--seed", type=int, default=42, help="Random seed (default: 42)")
-    common_args.add_argument("--data-path", type=str, default="data/band_gap_processed_5000.csv", help="Path to seed structures data file (default: data/band_gap_processed_5000.csv)")
-    common_args.add_argument("--model", type=str, default="meta-llama/Meta-Llama-3.1-70B-Instruct",
-                           help="LLM model to use")
+    common_args.add_argument("--data-path", type=str, default="data/band_gap_processed.csv", help="Path to seed structures data file (default: data/band_gap_processed.csv)")
+    common_args.add_argument("--model", type=str, default="openai/gpt-4o-2024-08-06",
+                           help="LLM model to use (must be defined in config/models.yaml)")
     common_args.add_argument("--temperature", type=float, default=1.0, help="Temperature for LLM (default: 1.0)")
     common_args.add_argument("--max-tokens", type=int, default=8000, help="Max tokens for LLM (default: 8000)")
+    common_args.add_argument("--device", type=str, default="cuda", choices=["cuda", "cpu"],
+                           help="Device for stability evaluation (default: cuda)")
 
     # Crystal Structure Generation (CSG) mode
     csg_parser = subparsers.add_parser(
@@ -104,16 +106,16 @@ Example usage:
                               help="Path to results directory (alternative to --input, looks for generations.csv)")
     analyze_parser.add_argument("--generate", action="store_true",
                            help="Generate structures via API instead of reading from file")
-    analyze_parser.add_argument("--model", type=str, default="openai/gpt-4o-mini",
-                           help="Model to use for API generation (default: openai/gpt-4o-mini)")
+    analyze_parser.add_argument("--model", type=str, default="openai/gpt-4o-2024-08-06",
+                           help="Model to use for API generation (must be defined in config/models.yaml)")
     analyze_parser.add_argument("--temperature", type=float, default=1.0,
                            help="Temperature for generation (default: 1.0)")
     analyze_parser.add_argument("--max-tokens", type=int, default=8000,
                            help="Max tokens for generation (default: 8000)")
     analyze_parser.add_argument("--fmt", choices=["poscar", "cif"], default="poscar",
                            help="Structure format for generation (default: poscar)")
-    analyze_parser.add_argument("--data-path", type=str, default="data/band_gap_processed_5000.csv",
-                           help="Path to seed structures data file for reference pool (default: data/band_gap_processed_5000.csv)")
+    analyze_parser.add_argument("--data-path", type=str, default="data/band_gap_processed.csv",
+                           help="Path to seed structures data file for reference pool (default: data/band_gap_processed.csv)")
     analyze_parser.add_argument("--max-iter", type=int, default=1,
                            help="Maximum iterations for generation (default: 1)")
     analyze_parser.add_argument("--population-size", type=int, default=None,
@@ -144,17 +146,27 @@ Example usage:
         sys.exit(1)
 
     if args.mode == "csg":
+        # E_hull needs the phase diagram; seed CSV is optional (zero-shot fallback).
+        default_ppd = "data/2023-02-07-ppd-mp.pkl.gz"
+        if not validate_data_files(data_path=args.data_path, ppd_path=default_ppd):
+            sys.exit(1)
         result = run_csg(args)
-        print(f"\\nCSG experiment completed. Results saved to {args.log_dir}")
-        
+        print(f"\nCSG experiment completed. Results saved to {args.log_dir}")
+
     elif args.mode == "csp":
+        default_ppd = "data/2023-02-07-ppd-mp.pkl.gz"
+        if not validate_data_files(data_path=args.data_path, ppd_path=default_ppd):
+            sys.exit(1)
         result = run_csp(args)
-        print(f"\\nCSP experiment completed. Results saved to {args.log_dir}")
-        
+        print(f"\nCSP experiment completed. Results saved to {args.log_dir}")
+
     elif args.mode == "analyze":
+        # Phase diagram is required for stability metrics.
+        if not validate_data_files(ppd_path=getattr(args, "ppd_path", None)):
+            sys.exit(1)
         result = run_analyze(args)
-        print(f"\\nAnalysis completed.")
-        
+        print(f"\nAnalysis completed.")
+
     else:
         parser.print_help()
         sys.exit(1)
