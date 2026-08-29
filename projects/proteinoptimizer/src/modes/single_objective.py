@@ -4,6 +4,9 @@ import sys
 import os
 import time
 from typing import Dict, Any, List
+from ..weave_utils import configure_weave, safe_weave_init
+
+configure_weave()
 import weave
 
 # Add project root to path
@@ -35,7 +38,7 @@ def run_single_objective(args) -> Dict[str, Any]:
         Optimization results
     """
     # Weave setup
-    weave.init(project_name="sde-harness-protein_singleobj")
+    safe_weave_init(weave, "sde-harness-protein_singleobj")
 
     print(f"Running single objective optimization for {args.oracle}...")
     

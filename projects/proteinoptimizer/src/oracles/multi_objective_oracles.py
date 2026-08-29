@@ -1,7 +1,10 @@
 from __future__ import annotations
 from typing import List
 
+import numpy as np
+
 from src.oracles.base import ProteinOracle
+from src.oracles.fitness_oracles import A2N
 from src.utils.potts_model import PottsModel
 
 def min_max_normalize(minimum,maximum,score):
@@ -35,5 +38,6 @@ class PottsObjective(ProteinOracle):
         self._potts_model = potts_model
 
     def _evaluate_protein_impl(self, sequence: str) -> float:
-        """Predict fitness using the Potts model."""
-        return min_max_normalize(-3, 3, self._potts_model.predict(sequence))
+        """Predict fitness using the Potts model (same encoding as Syn3bfoOracle)."""
+        encoded = np.array([A2N[i] for i in sequence])
+        return min_max_normalize(-3, 3, self._potts_model.evaluate(encoded)[0])

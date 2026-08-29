@@ -3,6 +3,9 @@ from __future__ import annotations
 
 import os, sys
 from typing import Dict, Any
+from ..weave_utils import configure_weave, safe_weave_init
+
+configure_weave()
 import weave
 import time
 
@@ -37,7 +40,7 @@ def run_multi_pareto(args):
         raise ValueError(f"Unknown oracle: {args.oracle}")
 
     # Weave setup
-    weave.init(project_name="sde-harness-protein_pareto")
+    safe_weave_init(weave, "sde-harness-protein_pareto")
 
     print(f"Running Pareto optimization for {args.oracle}...")
 

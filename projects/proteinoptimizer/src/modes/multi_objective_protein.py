@@ -3,6 +3,9 @@ from __future__ import annotations
 
 import os, sys
 from typing import Dict, Any, List
+from ..weave_utils import configure_weave, safe_weave_init
+
+configure_weave()
 import weave
 import time
 
@@ -39,7 +42,7 @@ def run_multi_objective(args):
 
     # Weave setup
     experiment_name = f"protein_multiobj_{args.oracle}_{int(time.time())}"
-    weave.init(project_name="sde-harness-protein_multiobj")
+    safe_weave_init(weave, "sde-harness-protein_multiobj")
 
     print(f"Running multi-objective optimization for {args.oracle}...")
 
