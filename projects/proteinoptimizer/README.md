@@ -169,14 +169,19 @@ The script expects JSON files named `results_single_<task>_<seed>_<model>.json` 
 
 ## Results
 
-| Model             |  Top_1  |
-|:------------------|--------:|
-| Baseline          |  0.7514 |
-| GPT-5-mini        |  0.7867 |
-| DeepSeek          |  0.8713 |
-| Claude-Sonnet-4-5 |  0.7759 |
-| GPT-5             |  0.8561 |
-| GPT-5-chat-latest |  0.8582 |
+Mean over all five oracles (`syn-3bfo`, `gb1`, `trpb`, `aav`, `gfp`) at seed 0, using the run_all.sh settings (`--generations 8 --population-size 200 --offspring-size 100`). Numbers are exactly what `src/analyze.py --higher-is-better 1` prints.
+
+| Model             |  Top_1 |  Top_5 | Top_10 |
+|:------------------|-------:|-------:|-------:|
+| Baseline          | 0.7514 | 0.6899 | 0.6564 |
+| GPT5-mini         | 0.7867 | 0.7262 | 0.6821 |
+| DeepSeek          | 0.8713 | 0.8022 | 0.7649 |
+| Claude-Sonnet-4-5 | 0.7759 | 0.6967 | 0.6427 |
+| GPT-5             | 0.8561 | 0.8129 | 0.7842 |
+| GPT-5-chat-latest | 0.8582 | 0.7896 | 0.7438 |
+
+- `Top_1` — mean across oracles of each run's best score.
+- `Top_5` / `Top_10` — mean across oracles of each run's average score over the top-5 / top-10 candidates in the final population.
 
 Reproduce with:
 ```bash
