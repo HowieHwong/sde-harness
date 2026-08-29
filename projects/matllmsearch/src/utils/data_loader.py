@@ -86,10 +86,13 @@ def _load_from_bandgap_data(data_path: Path, task: str,
     df = df.dropna(subset=['structure'])
     df['composition'] = [s.composition for s in df['structure']]
     df['composition_len'] = [len(s.composition.elements) for s in df['structure']]
-    
-    # Filter by composition length (3-6 elements for reasonable complexity)
-    df = df[df['composition_len'].between(3, 6)]
-    
+
+    # For CSG, restrict to 3-6 element compounds for reasonable complexity.
+    # CSP targets specific compounds (often binary) and does its own
+    # composition matching downstream, so it must not be pre-filtered here.
+    if task != "csp":
+        df = df[df['composition_len'].between(3, 6)]
+
     # Shuffle to get diverse samples
     df = df.sample(frac=1, random_state=random_seed)
     
