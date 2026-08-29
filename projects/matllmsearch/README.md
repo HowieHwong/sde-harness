@@ -50,23 +50,10 @@ Paper: [MatLLMSearch: Crystal Structure Discovery with Evolution-Guided Large La
    ```bash
    export OPENAI_API_KEY="your-api-key-here"
    ```
-   Other providers (Anthropic, DeepSeek, xAI, Gemini, AWS Bedrock, ...) are
-   supported the same way — see `config/models.template.yaml` and
+   Other providers (Anthropic, DeepSeek, xAI, Gemini, ...) are supported the
+   same way — see `config/models.template.yaml` and
    `config/credentials.template.yaml`. Any model passed to `--model` must be
-   defined in `config/models.yaml`. Example for Bedrock:
-   ```yaml
-   # config/models.yaml
-   bedrock/claude-sonnet-4-5:
-     provider: bedrock
-     model: us.anthropic.claude-sonnet-4-5-20250929-v1:0
-     credentials: bedrock
-
-   # config/credentials.yaml
-   bedrock:
-     aws_access_key_id: ${AWS_ACCESS_KEY_ID}
-     aws_secret_access_key: ${AWS_SECRET_ACCESS_KEY}
-     aws_region_name: ${AWS_REGION_NAME}
-   ```
+   defined in `config/models.yaml`.
 
 5. Download required data files. The files are hosted on Google Drive; use
    `gdown` (`pip install gdown`) since `wget` does not handle large Drive files:
