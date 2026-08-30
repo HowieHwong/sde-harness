@@ -10,7 +10,7 @@ ProteinOptimizer evolves populations of fixed-length protein sequences with a ge
 
 This project is a self-contained re-implementation of the relevant parts of the original **LLMProteinOptimizer** paper (LMRL Workshop @ ICLR 2025), refactored to live inside the `sde-harness` codebase.
 
-Paper: [https://arxiv.org/abs/2501.09274](https://arxiv.org/abs/2501.09274)
+Paper: [Large Language Model is Secretly a Protein Sequence Optimizer](https://openreview.net/forum?id=mTiXtuIdck) (LMRL Workshop @ ICLR 2025). Preprint: [arXiv:2501.09274](https://arxiv.org/abs/2501.09274)
 
 ## 📦 Install
 
@@ -415,7 +415,8 @@ This refactor inherits the original Apache 2.0 license for the Potts model code 
 
 ## 🔗 Related Links
 
-- Paper: [https://arxiv.org/abs/2501.09274](https://arxiv.org/abs/2501.09274)
+- Paper (LMRL Workshop @ ICLR 2025): [https://openreview.net/forum?id=mTiXtuIdck](https://openreview.net/forum?id=mTiXtuIdck)
+- Preprint: [https://arxiv.org/abs/2501.09274](https://arxiv.org/abs/2501.09274)
 - SDE-Harness framework: [https://github.com/HowieHwong/sde-harness](https://github.com/HowieHwong/sde-harness)
 - Provider and model configuration: [LiteLLM providers](https://docs.litellm.ai/docs/providers)
 
@@ -428,6 +429,7 @@ If you find this work useful, please cite our paper:
   title={Large Language Model is Secretly a Protein Sequence Optimizer},
   author={Wang, Yinkai and He, Jiaxing and Du, Yuanqi and Chen, Xiaohui and Li, Jianan Canal and Liu, Liping and Xu, Xiaolin and Hassoun, Soha},
   booktitle={Learning Meaningful Representations of Life (LMRL) Workshop at ICLR 2025},
-  year={2025}
+  year={2025},
+  url={https://openreview.net/forum?id=mTiXtuIdck}
 }
 ```
