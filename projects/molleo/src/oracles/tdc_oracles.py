@@ -17,7 +17,6 @@ class TDCOracle(MolecularOracle):
         'qed': 'QED',
         'sa': 'SA',
         'logp': 'LogP',
-        'penalized_logp': 'Penalized logP',
     }
     
     def __init__(self, oracle_name: str, **kwargs):

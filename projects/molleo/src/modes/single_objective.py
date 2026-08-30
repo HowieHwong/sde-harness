@@ -3,6 +3,10 @@
 import sys
 import os
 from typing import Dict, Any, List
+
+from ..weave_utils import configure_weave, safe_weave_init
+
+configure_weave()
 import weave
 
 # Add project root to path
@@ -37,7 +41,7 @@ def run_single_objective(args) -> Dict[str, Any]:
     print(f"🚀 Running single objective optimization for {args.oracle}...")
     
     # Initialize Weave for tracking
-    weave.init(f"molleo_single_{args.oracle}")
+    safe_weave_init(weave, f"molleo_single_{args.oracle}")
     
     # Create oracle
     oracle = TDCOracle(args.oracle)
@@ -72,8 +76,11 @@ def run_single_objective(args) -> Dict[str, Any]:
             # Get some molecules
             df = data.get_data()
             if len(df) > 0:
-                # Add some molecules from TDC
-                default_molecules = df.sample(n=min(10, len(df)))['smiles'].tolist()
+                # Add some molecules from TDC (seeded so runs are reproducible)
+                default_molecules = df.sample(
+                    n=min(args.initial_size, len(df)),
+                    random_state=args.seed,
+                )['smiles'].tolist()
                 print(f"Successfully loaded {len(default_molecules)} molecules from TDC")
         except Exception as e:
             print(f"TDC sampling failed: {e}")

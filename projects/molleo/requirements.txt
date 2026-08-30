@@ -1,25 +1,18 @@
-# MolLEO specific requirements
-# Note: Some dependencies are already satisfied in ../../requirements.txt
+# MolLEO-specific requirements.
+# Mirrors the pip section of environment.yml; use it when you prefer
+# `pip install -r requirements.txt` inside an existing Python 3.10 env.
+#
+# The pins are not cosmetic -- see environment.yml for why each one matters:
+#   * setuptools<81 still ships `pkg_resources`, which PyTDC imports
+#   * scikit-learn 1.2.2 is the only line that can unpickle TDC's
+#     JNK3 / GSK3B / DRD2 oracle models
+#   * litellm 1.73.6.post1 + pydantic 2.11.x is the combination that works
+#     on Python 3.10 (newer pydantic breaks litellm, litellm 1.98+ needs 3.11)
 
-# PyTorch and related (torch>=2.0.0 already in parent requirements)
-# Only specify if specific version needed for MolLEO
-# pytorch==2.1.2
-# torchvision==0.16.2
-# torchaudio==2.1.2
-
-# Chemistry and molecular libraries
-PyTDC
-rdkit
-
-# Configuration
-PyYAML
-
-# Language models (transformers>=4.30.0 already in parent requirements)
-sentencepiece
-selfies
-
-# Note: The following are already satisfied in ../../requirements.txt:
-# - torch>=2.0.0
-# - transformers>=4.30.0
-# - numpy>=1.21.0
-# - openai>=1.0.0 (for GPT-4 API)
+PyTDC==1.1.15
+setuptools==80.10.2
+scikit-learn==1.2.2
+litellm==1.73.6.post1
+pydantic==2.11.10
+weave==0.53.7
+PyYAML==6.0.3

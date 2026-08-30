@@ -1,0 +1,22 @@
+name: ScienceBench_MolLEO
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10
+  - pip=24.3.1
+  - pip:
+      # PyTDC brings the molecular oracles and the ZINC starting pool.
+      # It pins numpy<2, pandas, rdkit==2023.9.x and transformers itself.
+      - PyTDC==1.1.15
+      # `pkg_resources` was removed in setuptools 81; PyTDC still imports it.
+      - setuptools==80.10.2
+      # TDC's JNK3/GSK3B/DRD2 oracles are scikit-learn pickles that only
+      # unpickle on 1.2.x -- newer scikit-learn raises "incompatible dtype".
+      - scikit-learn==1.2.2
+      # litellm 1.73.x breaks on pydantic>=2.12 ("`Message` is not fully
+      # defined"), and litellm 1.98+ cannot be imported on Python 3.10.
+      - litellm==1.73.6.post1
+      - pydantic==2.11.10
+      - weave==0.53.7
+      - pyyaml==6.0.3

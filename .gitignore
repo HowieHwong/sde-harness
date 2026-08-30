@@ -15,3 +15,8 @@ projects/llm_sr_old/
 projects/llmsr/outputs
 projects/xray-spectral-fitting/*results*
 
+
+# MolLEO runtime artifacts (TDC downloads + optimization outputs)
+projects/molleo/data/
+projects/molleo/oracle/
+projects/molleo/results/

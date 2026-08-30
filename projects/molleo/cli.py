@@ -5,9 +5,12 @@ Command Line Interface using SDE-Harness framework
 """
 
 import argparse
+import random
 import sys
 import os
 from typing import Optional
+
+import numpy as np
 
 # Add project root to Python path
 project_root = os.path.dirname(
@@ -49,22 +52,22 @@ Example usage:
         help="Model name for LLM-guided mutations (e.g., openai/gpt-4o-2024-08-06, claude-3-opus-20240229). Use 'none' for random mutations only."
     )
     common_args.add_argument(
-        "--population-size", 
-        type=int, 
+        "--population-size",
+        type=int,
         default=10,
-        help="Population size (default: 100)"
+        help="Population size (default: 10)"
     )
     common_args.add_argument(
         "--offspring-size",
         type=int,
         default=20,
-        help="Offspring per generation (default: 200)"
+        help="Offspring per generation (default: 20)"
     )
     common_args.add_argument(
         "--generations",
         type=int,
         default=3,
-        help="Number of generations (default: 20)"
+        help="Number of generations (default: 3)"
     )
     common_args.add_argument(
         "--mutation-rate",
@@ -102,7 +105,7 @@ Example usage:
         "--oracle",
         type=str,
         required=True,
-        choices=["jnk3", "gsk3b", "drd2", "qed", "sa", "logp", "penalized_logp"],
+        choices=["jnk3", "gsk3b", "drd2", "qed", "sa", "logp"],
         help="Oracle function to optimize"
     )
 
@@ -169,6 +172,9 @@ Example usage:
     seeds = args.seed  # Save the list
     for seed in seeds:
         args.seed = seed  # Set the current seed
+        # Seed every RNG the GA touches so a run is reproducible
+        random.seed(seed)
+        np.random.seed(seed)
         print(f"\n{'='*60}")
         print(f"Running with seed {seed}")
         print(f"{'='*60}\n")
