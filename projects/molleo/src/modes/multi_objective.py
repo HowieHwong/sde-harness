@@ -4,6 +4,10 @@ import sys
 import os
 from typing import Dict, Any, List, Tuple
 import numpy as np
+
+from ..weave_utils import configure_weave, safe_weave_init
+
+configure_weave()
 import weave
 
 # Add project root to path
@@ -113,7 +117,7 @@ def run_multi_objective(args) -> Dict[str, Any]:
     
     # Initialize Weave
     obj_str = "_".join(args.max_objectives + args.min_objectives)
-    weave.init(f"molleo_multi_{obj_str}")
+    safe_weave_init(weave, f"molleo_multi_{obj_str}")
     
     # Create individual oracles
     oracles = []
@@ -172,8 +176,11 @@ def run_multi_objective(args) -> Dict[str, Any]:
         # Get some molecules
         df = data.get_data()
         if len(df) > 0:
-            # Add some molecules from TDC
-            default_molecules = df.sample(n=min(10, len(df)))['smiles'].tolist()
+            # Add some molecules from TDC (seeded so runs are reproducible)
+            default_molecules = df.sample(
+                n=min(args.initial_size, len(df)),
+                random_state=args.seed,
+            )['smiles'].tolist()
             print(f"Successfully loaded {len(default_molecules)} molecules from TDC")
     except Exception as e:
         print(f"TDC sampling failed: {e}")
@@ -281,5 +288,19 @@ def run_multi_objective(args) -> Dict[str, Any]:
     for name, score, direction in zip(oracle_names, best_scores, oracle_directions):
         dir_str = "↑" if direction > 0 else "↓"
         print(f"  {name} {dir_str}: {score:.4f}")
-    
+
+    # Save results (same contract as the single-objective mode)
+    if getattr(args, "output_dir", None):
+        import json
+        model_tag = args.model.replace('/', '_') if args.model else 'random'
+        output_file = os.path.join(
+            args.output_dir,
+            f"results_{obj_str}_{model_tag}_{args.seed}.json"
+        )
+        os.makedirs(args.output_dir, exist_ok=True)
+
+        with open(output_file, 'w') as f:
+            json.dump(results, f, indent=2)
+        print(f"\nResults saved to: {output_file}")
+
     return results
