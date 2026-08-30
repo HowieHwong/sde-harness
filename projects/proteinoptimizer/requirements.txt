@@ -1,25 +1,11 @@
-# MolLEO specific requirements
-# Note: Some dependencies are already satisfied in ../../requirements.txt
+# ProteinOptimizer-specific Python dependencies
+# Assumes the parent sde-harness requirements (torch, transformers, numpy,
+# litellm, weave, openai, anthropic, ...) are already installed. See
+# ../../requirements.txt for that base set, or use the project-level
+# environment.yml which installs both layers.
 
-# PyTorch and related (torch>=2.0.0 already in parent requirements)
-# Only specify if specific version needed for MolLEO
-# pytorch==2.1.2
-# torchvision==0.16.2
-# torchaudio==2.1.2
-
-# Chemistry and molecular libraries
-PyTDC
-rdkit
-
-# Configuration
-PyYAML
-
-# Language models (transformers>=4.30.0 already in parent requirements)
-sentencepiece
-selfies
-
-# Note: The following are already satisfied in ../../requirements.txt:
-# - torch>=2.0.0
-# - transformers>=4.30.0
-# - numpy>=1.21.0
-# - openai>=1.0.0 (for GPT-4 API)
+pandas>=1.3.0
+matplotlib>=3.5.0
+seaborn
+omegaconf
+tabulate   # analyze.py calls df.to_markdown()

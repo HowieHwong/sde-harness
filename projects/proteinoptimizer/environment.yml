@@ -1,0 +1,24 @@
+name: ScienceBench_ProteinOptimizer
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10
+  - pip
+  - numpy=2.0.2
+  - pandas=2.2.3
+  - scipy=1.13.1
+  - pyyaml=6.0.2
+  - matplotlib=3.9.2
+  - seaborn=0.13.2
+  - tabulate=0.9.0
+  - pip:
+    - torch
+    - transformers==4.53.0
+    - omegaconf==2.3.0
+    # tiktoken>=0.10 ships no cp310 wheel and needs a Rust toolchain to build from source
+    - tiktoken==0.9.0
+    - litellm==1.73.6.post1
+    - weave>=0.51.54
+    - openai
+    - anthropic

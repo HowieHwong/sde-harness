@@ -1,0 +1,6 @@
+# Local run artefacts (see README: run_all.sh writes logs/, smoke tests use results_smoke/)
+logs/
+results_smoke/
+results_repro/
+__pycache__/
+*.pyc

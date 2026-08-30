@@ -54,6 +54,11 @@ class ProteinOptimizer:
         self.scores: List[float] = []
         self.all_results: Dict[str, float] = {}
         self.generation_count: int = 0
+        # LLM bookkeeping: a failed call silently degrades the run to the random
+        # baseline, so keep track of it and report it to the user.
+        self.llm_mutations: int = 0
+        self.llm_fallbacks: int = 0
+        self._llm_error_reported: bool = False
 
         # LLM generator (lazy import)
         if self.use_llm_mutations:
@@ -116,6 +121,13 @@ class ProteinOptimizer:
                 f"Oracle calls = {self.oracle.call_count}"
             )
 
+        if self.use_llm_mutations:
+            total = self.llm_mutations + self.llm_fallbacks
+            print(
+                f"LLM-guided mutations: {self.llm_mutations}/{total} succeeded, "
+                f"{self.llm_fallbacks} fell back to random mutation."
+            )
+
         return {
             "best_sequence": best_sequences[-1],
             "best_score": best_scores[-1],
@@ -123,6 +135,8 @@ class ProteinOptimizer:
             "best_sequences_history": best_sequences,
             "final_population": list(zip(self.population, self.scores)),
             "oracle_calls": self.oracle.call_count,
+            "llm_mutations": self.llm_mutations,
+            "llm_fallbacks": self.llm_fallbacks,
             "all_results": self.all_results,
         }
 
@@ -335,13 +349,28 @@ class ProteinOptimizer:
                 if generated_sequence:
                     break
                 retry_count += 1
-                print(retry_count)
 
             if generated_sequence:
+                self.llm_mutations += 1
                 return generated_sequence
 
-        except Exception:
-            pass
+            if not self._llm_error_reported:
+                print(
+                    f"[WARN] {self.model_name} returned no valid sequence after "
+                    f"{max_retries} attempts; falling back to random mutation."
+                )
+                self._llm_error_reported = True
+
+        except Exception as exc:
+            if not self._llm_error_reported:
+                print(
+                    f"[WARN] LLM call to {self.model_name} failed "
+                    f"({exc.__class__.__name__}: {exc}); falling back to random mutation. "
+                    "Check models.yaml / credentials.yaml — the run will otherwise "
+                    "reproduce the random baseline."
+                )
+                self._llm_error_reported = True
+        self.llm_fallbacks += 1
         # fallback
         # If all LLM attempts fail, use crossover + mutation
         parent_a, parent_b = prompt_obj.default_vars["protein_seq_1"], prompt_obj.default_vars["protein_seq_2"]

@@ -46,7 +46,7 @@ class ParetoOptimizer(ProteinOptimizer):
         offspring, offspring_scores = [], []
         for _ in range(self.offspring_size):
             p1, p2 = np.random.choice(len(self.population), 2, replace=True, p=probs)
-            child1 = self._llm_mutate(p1, p2) if self.use_llm_mutations else self._random_mutate(seq=self.population[p1])
+            child1 = self._llm_mutate(p1, p2) if self.use_llm_mutations else self._random_mutate(self.population[p1])
             if child1 not in self.all_results:
                 sc = self._eval_sequence(seq=child1)
                 offspring.append(child1)
@@ -73,7 +73,9 @@ class ParetoOptimizer(ProteinOptimizer):
 
     def optimize(self, starting_sequences: List[str], num_generations: int = 20) -> Dict[str, Any]:
         """Run the GA optimisation loop for Pareto optimization."""
-        if not starting_sequences:
+        # `starting_sequences` may be a numpy array (oracles sample with np.random.choice),
+        # so test the length explicitly rather than the truth value.
+        if starting_sequences is None or len(starting_sequences) == 0:
             raise ValueError("`starting_sequences` must contain at least one sequence.")
 
         self._initialize_population(starting_sequences)
