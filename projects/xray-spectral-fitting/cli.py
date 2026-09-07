@@ -29,6 +29,50 @@ from src.evaluator import evaluate_results, load_spectrum_metadata
 
 # ---- helpers ------------------------------------------------------------
 
+def _apply_benchmark_scoring(results, metrics, ground_truth):
+    """Fill in the four pass/fail criteria and the final score.
+
+    Runs for every invocation (verbose or not) so that ``results.json`` and
+    ``*_summary.txt`` always carry ``final_score`` / ``final_status``.
+    """
+    best_result = results.get("best_result") or {}
+    fitted_params = best_result.get("params", {}) if best_result else {}
+
+    kt_val = next((v for n, v in fitted_params.items() if n.lower().endswith(".kt")), None)
+    gamma_val = next(
+        (v for n, v in fitted_params.items() if "phoindex" in n.lower() or "gamma" in n.lower()),
+        None,
+    )
+    if kt_val is not None:
+        metrics["kt_value"] = kt_val
+        metrics["kt_correct"] = 1.80 <= kt_val <= 1.90
+    if gamma_val is not None:
+        metrics["gamma_value"] = gamma_val
+        metrics["gamma_correct"] = 0.4 <= gamma_val <= 0.6
+
+    llm_class = (results.get("classification") or "").lower()
+    expected_class = (ground_truth.get("expected_classification") or "").lower()
+    metrics["llm_classification"] = results.get("classification") or "N/A"
+    metrics["classification_correct"] = bool(expected_class and llm_class == expected_class)
+
+    first_correct_class_gen = None
+    for entry in results.get("classification_log", []):
+        if expected_class and entry.get("classification", "").lower() == expected_class:
+            first_correct_class_gen = entry["generation"]
+            break
+    metrics["first_correct_classification_gen"] = first_correct_class_gen
+
+    good_fit = metrics.get("cstat_vs_optimal", 1.0) <= 0.05
+    correct_model = bool(metrics.get("found_expected_model"))
+    correct_param = bool(metrics.get("kt_correct")) or bool(metrics.get("gamma_correct"))
+    metrics["good_fit"] = good_fit
+    metrics["param_correct"] = correct_param
+    score = sum([good_fit, correct_model, correct_param, metrics["classification_correct"]])
+    metrics["final_score"] = score
+    metrics["final_status"] = "success" if score == 4 else ("partial" if score >= 2 else "failed")
+    return metrics
+
+
 def _build_summary_text(results, metrics, ground_truth):
     """Build human-readable summary lines for writing to _summary.txt."""
     lines = []
@@ -102,11 +146,11 @@ def _build_summary_text(results, metrics, ground_truth):
         kt_found = next((pval for pname, pval in fitted_params.items() if pname.lower().endswith(".kt")), None)
         if kt_found is not None:
             lines.append("  Fitted kT: {:.3f} keV".format(kt_found))
-    good_fit = metrics.get("cstat_vs_optimal", 1.0) <= 0.05
-    correct_model = metrics.get("found_expected_model", False)
-    correct_kt = metrics.get("kt_correct", False)
+    good_fit = metrics.get("good_fit", metrics.get("cstat_vs_optimal", 1.0) <= 0.05)
+    correct_model = bool(metrics.get("found_expected_model", False))
+    correct_kt = metrics.get("param_correct", metrics.get("kt_correct", False) or metrics.get("gamma_correct", False))
     correct_classification = metrics.get("classification_correct", False)
-    results_achieved = sum([good_fit, correct_model, correct_kt, correct_classification])
+    results_achieved = metrics.get("final_score", sum([good_fit, correct_model, correct_kt, correct_classification]))
     best_rcstat = best_result.get("reduced_cstat", 0) if best_result else 0
     best_bic = best_result.get("bic", 0) if best_result else 0
     lines.append("")
@@ -167,6 +211,7 @@ def cmd_fit(args: argparse.Namespace) -> int:
         )
 
         metrics = evaluate_results(results, ground_truth)
+        _apply_benchmark_scoring(results, metrics, ground_truth)
 
         if args.verbose:
             # Print ranking of all model fits (sorted by BIC)
@@ -355,17 +400,23 @@ def cmd_fit(args: argparse.Namespace) -> int:
                 metrics["final_status"] = "success" if results_achieved == 4 else ("partial" if results_achieved >= 2 else "failed")
 
         if args.output:
+            output_path = args.output
+            if len(args.seed) > 1:
+                root, ext = os.path.splitext(args.output)
+                output_path = "{r}_seed{s}{e}".format(r=root, s=seed, e=ext or ".json")
+            out_dir = os.path.dirname(os.path.abspath(output_path))
+            os.makedirs(out_dir, exist_ok=True)
             output_data = {
                 "results": results,
                 "metrics": metrics,
                 "ground_truth": ground_truth,
                 "metadata": metadata,
             }
-            with open(args.output, "w") as f:
+            with open(output_path, "w") as f:
                 json.dump(output_data, f, indent=2, default=str)
-            print("\nSaved to {o}".format(o=args.output))
+            print("\nSaved to {o}".format(o=output_path))
 
-            base = os.path.splitext(args.output)[0]
+            base = os.path.splitext(output_path)[0]
 
             # generations.csv: per-generation, per-model convergence info
             gen_log = results.get("generations_log", [])
@@ -388,6 +439,13 @@ def cmd_fit(args: argparse.Namespace) -> int:
                 with open(summary_path, "w") as f:
                     f.write("\n".join(summary_lines))
                 print("Saved to {o}".format(o=summary_path))
+
+        if not args.verbose and ground_truth:
+            print("Best model: {m}  |  SCORE: {s}/4 criteria met ({st})".format(
+                m=metrics.get("best_model", "N/A"),
+                s=metrics.get("final_score", 0),
+                st=metrics.get("final_status", "n/a").upper(),
+            ))
 
     return 0
 
@@ -440,7 +498,7 @@ Examples:
         "--model",
         type=str,
         default="openai/gpt-4o-2024-08-06",
-        help="LLM model name as defined in config/models.yaml (default: openai/gpt-4o-2024-08-06)",
+        help="LLM model name as defined in the harness-root models.yaml (default: openai/gpt-4o-2024-08-06)",
     )
     fit_p.add_argument(
         "--population-size", type=int, default=2,

@@ -5,6 +5,26 @@ from typing import Any, Dict, List, Optional, Tuple
 from ..compat import Oracle
 
 
+def _ensure_io_backend() -> None:
+    """Make sure Sherpa has a FITS I/O backend before ``load_pha`` is called.
+
+    The CIAO/CXC build of Sherpa lists only the ``crates`` backend in its
+    ``sherpa.rc``. When ``pycrates`` cannot be imported (e.g. a numpy that is too
+    new for the installed CIAO) Sherpa silently falls back to the ``dummy``
+    backend and every fit fails with ``No usable I/O backend was imported``.
+    If astropy is installed, switch to Sherpa's astropy (``pyfits``) backend.
+    """
+    try:
+        from sherpa.astro import io
+    except Exception:
+        return
+    if getattr(io.backend, "__name__", "").endswith("dummy_backend"):
+        for name in ("pyfits", "astropy", "crates"):
+            if name in io.IO_BACKENDS:
+                io.set_io_backend(name)
+                return
+
+
 class SherpaOracle(Oracle):
     """
     Oracle that wraps Sherpa spectral fitting.
@@ -88,6 +108,8 @@ class SherpaOracle(Oracle):
         """
         from sherpa.astro import ui
         import json
+
+        _ensure_io_backend()
 
         self.call_count += 1
 

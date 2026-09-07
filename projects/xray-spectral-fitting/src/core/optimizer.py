@@ -197,6 +197,22 @@ def format_errors_summary(errors: List[Tuple[str, str]]) -> str:
     return "\n".join(lines)
 
 
+def _find_config(harness_root: str, filename: str) -> str:
+    """Locate ``models.yaml`` / ``credentials.yaml``.
+
+    The harness convention (shared with the other projects) is to keep both files
+    in the harness root. ``config/<filename>`` is still honoured as a fallback for
+    setups that were created from the templates in ``config/``.
+    """
+    root_path = os.path.join(harness_root, filename)
+    if os.path.exists(root_path):
+        return root_path
+    config_path = os.path.join(harness_root, "config", filename)
+    if os.path.exists(config_path):
+        return config_path
+    return root_path  # let Generation raise a clear FileNotFoundError
+
+
 class SpectralFitOptimizer:
     """
     Evolutionary optimizer for X-ray spectral fitting.
@@ -222,8 +238,8 @@ class SpectralFitOptimizer:
             os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
         )
         self.generator = Generation(
-            models_file=os.path.join(harness_root, "config", "models.yaml"),
-            credentials_file=os.path.join(harness_root, "config", "credentials.yaml"),
+            models_file=_find_config(harness_root, "models.yaml"),
+            credentials_file=_find_config(harness_root, "credentials.yaml"),
         )
 
         self.population: List[Tuple[str, Dict, str]] = []

@@ -1,23 +1,28 @@
-# Conda environment for X-Ray Spectral Fitting Benchmark
-# 
-# This environment provides Sherpa with XSPEC model support for X-ray spectral fitting.
+# Conda environment for the X-Ray Spectral Fitting benchmark.
 #
-# Installation:
 #   conda env create -f environment.yml
-#   conda activate xray-spectral-fitting
-#   pip install openai
+#   conda activate ScienceBench_XraySpectralFitting
 #
-# Note: Sherpa with XSPEC requires the CIAO conda channel and works best on x86_64.
-# On Apple Silicon (M1/M2/M3), you may need to use Rosetta or the ml4ciao environment.
-
-name: xray-spectral-fitting
+# Sherpa with the XSPEC model library is only distributed through the Chandra
+# X-ray Center (CXC) conda channel below. The conda-forge `sherpa` package has
+# NO XSPEC models (xstbabs, xsbbody, ...) and will not work for this project.
+# CXC builds exist for linux-64, osx-64 and osx-arm64 (no linux-aarch64).
+name: ScienceBench_XraySpectralFitting
 channels:
+  - https://cxc.cfa.harvard.edu/conda/ciao
   - conda-forge
-  - ciao
-  - defaults
+  - nodefaults
 dependencies:
-  - python=3.10
-  - sherpa
+  - python=3.12
+  - sherpa=4.18.0
+  # CIAO 4.18's pycrates (Sherpa's default FITS I/O backend) still uses
+  # numpy.chararray, which numpy 2.5 removed; with 2.5.x every `load_pha`
+  # fails with "No usable I/O backend was imported".
+  - numpy>=2.3.5,<2.5
+  # astropy provides Sherpa's alternative FITS I/O backend; the oracle falls back
+  # to it automatically if pycrates cannot be imported.
+  - astropy
+  - pyyaml
   - pip
   - pip:
-    - openai>=1.0.0
+    - litellm
