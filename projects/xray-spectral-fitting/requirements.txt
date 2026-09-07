@@ -1,12 +1,12 @@
-# X-Ray Spectral Fitting Dependencies
+# pip dependencies for the X-Ray Spectral Fitting benchmark.
 #
-# Install with: pip install -r requirements.txt
+# This file covers ONLY the pure-Python part. Sherpa with the XSPEC model
+# library cannot be pip-installed; it must come from the Chandra X-ray Center
+# conda channel (see environment.yml, which is the recommended route):
 #
-# IMPORTANT: Sherpa with XSPEC support must be installed separately via conda:
-#   conda install -c conda-forge -c ciao sherpa
-#
-# Or use the provided setup script:
-#   ./setup_env.sh
-
-# LLM API client
-openai>=1.0.0
+#   conda create -n ScienceBench_XraySpectralFitting -c https://cxc.cfa.harvard.edu/conda/ciao -c conda-forge python=3.12 sherpa=4.18.0
+#   conda activate ScienceBench_XraySpectralFitting
+#   pip install -r requirements.txt
+astropy
+litellm
+pyyaml

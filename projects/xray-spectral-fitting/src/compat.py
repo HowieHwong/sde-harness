@@ -54,12 +54,50 @@ class Generation:
     ):
         import yaml
 
-        with open(models_file) as f:
-            self.models = yaml.safe_load(f) or {}
-        with open(credentials_file) as f:
-            self.credentials = yaml.safe_load(f) or {}
+        try:
+            with open(models_file) as f:
+                self.models = yaml.safe_load(f) or {}
+        except FileNotFoundError:
+            raise FileNotFoundError(
+                "Models configuration file not found: {p}. Create models.yaml in the "
+                "harness root (see projects/xray-spectral-fitting/README.md, Install step 4).".format(p=models_file)
+            )
+        try:
+            with open(credentials_file) as f:
+                self.credentials = yaml.safe_load(f) or {}
+        except FileNotFoundError:
+            raise FileNotFoundError(
+                "Credentials configuration file not found: {p}. Create credentials.yaml in the "
+                "harness root (see projects/xray-spectral-fitting/README.md, Install step 4).".format(p=credentials_file)
+            )
 
         self.model_name = model_name
+
+    @staticmethod
+    def _expand_env_vars(cred: Dict[str, Any]) -> Dict[str, Any]:
+        """Resolve ``${VAR}`` / ``$VAR`` placeholders in credential values.
+
+        Mirrors ``sde_harness.core.generation.expand_env_vars_in_dict`` so that a
+        harness-root ``credentials.yaml`` written as ``api_key: ${OPENAI_API_KEY}``
+        works here exactly as it does for the other projects.
+        """
+        expanded = {}
+        for key, value in cred.items():
+            if isinstance(value, str) and value.startswith("${") and value.endswith("}"):
+                var_name = value[2:-1]
+            elif isinstance(value, str) and value.startswith("$") and not value.startswith("$$"):
+                var_name = value[1:]
+            else:
+                expanded[key] = value
+                continue
+            env_value = os.getenv(var_name)
+            if env_value is None:
+                raise ValueError(
+                    "Environment variable {v} is not set. Please set it or update "
+                    "credentials.yaml with the actual API key.".format(v=var_name)
+                )
+            expanded[key] = env_value
+        return expanded
 
     def generate(
         self,
@@ -83,7 +121,7 @@ class Generation:
         cred_tag = model_config.get("credentials")
         cred = {}
         if cred_tag and cred_tag in self.credentials:
-            cred = self.credentials[cred_tag] or {}
+            cred = self._expand_env_vars(self.credentials[cred_tag] or {})
 
         call_args = model_config.get("__call_args", {})
         for k, v in call_args.items():
