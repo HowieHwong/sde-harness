@@ -1,0 +1,42 @@
+{
+  "llm": {
+    "api_key": "your_openai_api_key_here",
+    "model": "gpt-4",
+    "max_tokens": 2000,
+    "temperature": 0.7,
+    "timeout": 60
+  },
+  "elucidation": {
+    "max_iterations": 10,
+    "similarity_threshold": 0.8,
+    "temperature": 0.7,
+    "save_intermediate_results": true,
+    "output_dir": "elucidation_results",
+    "log_level": "INFO",
+    "delay_between_iterations": 1.0,
+    "use_nmr_predictor": true,
+    "nmr_tolerance": 0.20,
+    "prefer_c_nmr": true
+  },
+  "nmr_predictor": {
+    "use_web_scraping": true,
+    "use_llm_fallback": true,
+    "headless_browser": true,
+    "web_timeout": 10,
+    "retry_attempts": 3,
+    "delay_between_requests": 2.0
+  },
+  "data": {
+    "data_path": "data/updated_table.csv",
+    "cache_results": true,
+    "cache_dir": "cache",
+    "max_cache_size": 1000
+  },
+  "visualization": {
+    "style": "default",
+    "save_plots": true,
+    "plot_format": "png",
+    "plot_dpi": 300,
+    "show_plots": true
+  }
+}

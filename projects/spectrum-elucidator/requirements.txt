@@ -1,0 +1,33 @@
+# Core dependencies (required)
+pandas>=1.5.0
+numpy>=1.21.0
+matplotlib>=3.5.0
+seaborn>=0.11.0
+openai>=1.0.0
+pathlib2>=2.3.0
+
+# Web scraping and data processing (optional but recommended)
+beautifulsoup4>=4.11.0
+urllib3>=1.26.0
+
+# Browser automation (optional - for web scraping)
+# selenium>=4.0.0              # Uncomment if you want web scraping from NMRDB
+# webdriver-manager>=3.8.0      # Uncomment if you want web scraping from NMRDB
+
+# Molecular handling (optional but recommended)
+# rdkit-pypi>=2022.9.1         # Uncomment for advanced molecular validation
+
+# Image processing (optional - not used in current implementation)
+# Pillow>=9.0.0                # Uncomment if you need image processing
+# easyocr>=1.7.0               # Uncomment if you need OCR (heavy PyTorch dependency)
+
+# Development dependencies (optional)
+# pytest>=7.0.0                # For testing
+# black>=22.0.0                # For code formatting
+# flake8>=5.0.0                # For linting
+
+# Note: 
+# - easyocr is excluded due to heavy PyTorch/NumPy compatibility issues
+# - selenium is optional for web scraping from NMRDB
+# - rdkit is optional but recommended for molecular validation
+# - The toolkit will work with just the core dependencies
