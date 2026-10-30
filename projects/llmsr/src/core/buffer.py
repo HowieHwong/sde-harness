@@ -1,361 +1,332 @@
-"""Evolutionary Buffer for LLMSR - Multi-island storage with Boltzmann sampling."""
+# Copyright 2023 DeepMind Technologies Limited
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ==============================================================================
+
+"""Multi-island experience buffer implementing the LLM-SR evolutionary search.
+
+Direct port of the experience buffer used in the original LLM-SR code (and in
+the LLM-SRBench / SDE-Harness paper runs):
+
+* Programs are scored by the negative training MSE (higher is better).
+* Inside an island, programs with identical scores are grouped in clusters.
+* Clusters are sampled with a softmax whose temperature is annealed with the
+  number of programs registered on the island.
+* Inside a cluster, shorter programs are preferred.
+* Every `reset_period` seconds the weaker half of the islands is reset and
+  re-seeded with the best program of a randomly chosen surviving island.
+"""
+from __future__ import annotations
+
+import copy
+import dataclasses
+import logging
+import time
+from collections.abc import Mapping, Sequence
+from typing import Any, Optional, Tuple
 
 import numpy as np
-import random
-from typing import Dict, List, Optional, Tuple, Any
-from dataclasses import dataclass, field
-from collections import defaultdict
-import math
+import scipy.special
+
+from . import code_manipulation
 
 
-@dataclass
-class EquationProgram:
-    """Represents an equation program with its metadata."""
+Signature = Tuple[float, ...]
+ScoresPerTest = Mapping[Any, float]
+
+
+@dataclasses.dataclass(frozen=True)
+class ExperienceBufferConfig:
+    """Experience buffer hyper-parameters (defaults match the paper runs).
+
+    Args:
+        functions_per_prompt: Number of previous hypotheses included in a prompt.
+        num_islands: Number of islands kept for diversity.
+        reset_period: Seconds between resets of the weakest islands.
+        cluster_sampling_temperature_init: Initial cluster softmax temperature.
+        cluster_sampling_temperature_period: Period of the temperature decay.
+    """
+    functions_per_prompt: int = 2
+    num_islands: int = 10
+    reset_period: int = 4 * 60 * 60
+    cluster_sampling_temperature_init: float = 0.1
+    cluster_sampling_temperature_period: int = 30_000
+
+
+def _softmax(logits: np.ndarray, temperature: float) -> np.ndarray:
+    """Returns the tempered softmax of 1D finite `logits`."""
+    if not np.all(np.isfinite(logits)):
+        non_finites = set(logits[~np.isfinite(logits)])
+        raise ValueError(f'`logits` contains non-finite value(s): {non_finites}')
+    if not np.issubdtype(logits.dtype, np.floating):
+        logits = np.array(logits, dtype=np.float32)
+
+    result = scipy.special.softmax(logits / temperature, axis=-1)
+    index = np.argmax(result)
+    result[index] = 1 - np.sum(result[0:index]) - np.sum(result[index + 1:])
+    return result
+
+
+def _reduce_score(scores_per_test: ScoresPerTest) -> float:
+    test_scores = [scores_per_test[k] for k in scores_per_test.keys()]
+    return sum(test_scores) / len(test_scores)
+
+
+def _get_signature(scores_per_test: ScoresPerTest) -> Signature:
+    """Represents test scores as a canonical signature."""
+    return tuple(scores_per_test[k] for k in sorted(scores_per_test.keys()))
+
+
+@dataclasses.dataclass(frozen=True)
+class Prompt:
+    """A prompt produced by the experience buffer.
+
+    Args:
+        code: The prompt, ending with the header of the function to be completed.
+        version_generated: The function to be completed is `_v{version_generated}`.
+        island_id: Island that produced the samples in the prompt. New samples
+            are registered back into the same island.
+    """
     code: str
-    nmse_score: float
-    iteration: int
+    version_generated: int
     island_id: int
-    metadata: Dict[str, Any] = field(default_factory=dict)
-    
-    def __post_init__(self):
-        # Ensure NMSE score is finite
-        if not np.isfinite(self.nmse_score):
-            self.nmse_score = float('inf')
+
+
+class ExperienceBuffer:
+    """A collection of programs, organized as islands."""
+
+    def __init__(
+            self,
+            config: ExperienceBufferConfig,
+            template: code_manipulation.Program,
+            function_to_evolve: str,
+    ) -> None:
+        self._config = config
+        self._template = template
+        self._function_to_evolve = function_to_evolve
+
+        self._islands: list[Island] = []
+        for _ in range(config.num_islands):
+            self._islands.append(
+                Island(template, function_to_evolve, config.functions_per_prompt,
+                       config.cluster_sampling_temperature_init,
+                       config.cluster_sampling_temperature_period))
+        self._best_score_per_island: list[float] = [-float('inf')] * config.num_islands
+        self._best_program_per_island: list[Optional[code_manipulation.Function]] = (
+            [None] * config.num_islands)
+        self._best_scores_per_test_per_island: list[Optional[ScoresPerTest]] = (
+            [None] * config.num_islands)
+
+        self._last_reset_time: float = time.time()
+
+    def get_prompt(self) -> Prompt:
+        """Returns a prompt containing samples from one chosen island."""
+        island_id = np.random.randint(len(self._islands))
+        code, version_generated = self._islands[island_id].get_prompt()
+        return Prompt(code, version_generated, island_id)
+
+    def _register_program_in_island(
+            self,
+            program: code_manipulation.Function,
+            island_id: int,
+            scores_per_test: ScoresPerTest,
+    ) -> None:
+        """Registers `program` in the specified island."""
+        self._islands[island_id].register_program(program, scores_per_test)
+        score = _reduce_score(scores_per_test)
+        if score > self._best_score_per_island[island_id]:
+            self._best_program_per_island[island_id] = program
+            self._best_scores_per_test_per_island[island_id] = scores_per_test
+            self._best_score_per_island[island_id] = score
+            logging.info('Best score of island %d increased to %s', island_id, score)
+
+    def register_program(
+            self,
+            program: code_manipulation.Function,
+            island_id: Optional[int],
+            scores_per_test: ScoresPerTest,
+    ) -> None:
+        """Registers a new program; `island_id=None` registers it in every island."""
+        if island_id is None:
+            for island_id in range(len(self._islands)):
+                self._register_program_in_island(program, island_id, scores_per_test)
+        else:
+            self._register_program_in_island(program, island_id, scores_per_test)
+
+        if time.time() - self._last_reset_time > self._config.reset_period:
+            self._last_reset_time = time.time()
+            self.reset_islands()
+
+    def reset_islands(self) -> None:
+        """Resets the weaker half of islands."""
+        # Sort best scores after adding minor noise to break ties.
+        indices_sorted_by_score: np.ndarray = np.argsort(
+            self._best_score_per_island +
+            np.random.randn(len(self._best_score_per_island)) * 1e-6)
+        num_islands_to_reset = self._config.num_islands // 2
+        reset_islands_ids = indices_sorted_by_score[:num_islands_to_reset]
+        keep_islands_ids = indices_sorted_by_score[num_islands_to_reset:]
+        for island_id in reset_islands_ids:
+            self._islands[island_id] = Island(
+                self._template,
+                self._function_to_evolve,
+                self._config.functions_per_prompt,
+                self._config.cluster_sampling_temperature_init,
+                self._config.cluster_sampling_temperature_period)
+            self._best_score_per_island[island_id] = -float('inf')
+            founder_island_id = np.random.choice(keep_islands_ids)
+            founder = self._best_program_per_island[founder_island_id]
+            founder_scores = self._best_scores_per_test_per_island[founder_island_id]
+            self._register_program_in_island(founder, island_id, founder_scores)
+
+    def get_statistics(self) -> dict:
+        """Summary statistics of the buffer (for logging)."""
+        return {
+            "num_islands": len(self._islands),
+            "best_score_per_island": list(self._best_score_per_island),
+            "programs_per_island": [island.num_programs for island in self._islands],
+            "clusters_per_island": [island.num_clusters for island in self._islands],
+        }
 
 
 class Island:
-    """An island in the evolutionary buffer containing equation programs."""
-    
-    def __init__(self, island_id: int, max_programs: int = 50):
-        self.island_id = island_id
-        self.max_programs = max_programs
-        self.programs: List[EquationProgram] = []
-        self.best_nmse = float('inf')
-        self.best_program: Optional[EquationProgram] = None
-    
-    def add_program(self, program: EquationProgram) -> bool:
-        """
-        Add a program to this island.
-        
-        Args:
-            program: The equation program to add
-            
-        Returns:
-            True if program was added, False if it didn't improve the best score
-        """
-        # Check if this program improves the best NMSE
-        improved = program.nmse_score < self.best_nmse
-        
-        if improved:
-            self.best_nmse = program.nmse_score
-            self.best_program = program
-        
-        # Add program to the list
-        self.programs.append(program)
-        
-        # Keep only the best programs if we exceed max_programs
-        if len(self.programs) > self.max_programs:
-            # Sort by NMSE score (lower is better)
-            self.programs.sort(key=lambda p: p.nmse_score)
-            # Keep the best programs
-            self.programs = self.programs[:self.max_programs]
-        
-        return improved
-    
-    def sample_programs(self, num_samples: int, temperature: float = 1.0) -> List[EquationProgram]:
-        """
-        Sample unique programs using Boltzmann distribution.
+    """A sub-population of the program skeleton experience buffer."""
 
-        Args:
-            num_samples: Number of programs to sample
-            temperature: Temperature for Boltzmann sampling (lower = more greedy)
+    def __init__(
+            self,
+            template: code_manipulation.Program,
+            function_to_evolve: str,
+            functions_per_prompt: int,
+            cluster_sampling_temperature_init: float,
+            cluster_sampling_temperature_period: int,
+    ) -> None:
+        self._template = template
+        self._function_to_evolve = function_to_evolve
+        self._functions_per_prompt = functions_per_prompt
+        self._cluster_sampling_temperature_init = cluster_sampling_temperature_init
+        self._cluster_sampling_temperature_period = cluster_sampling_temperature_period
 
-        Returns:
-            List of sampled unique programs
-        """
-        if not self.programs:
-            return []
+        self._clusters: dict[Signature, Cluster] = {}
+        self._num_programs: int = 0
 
-        # Remove duplicate programs based on code (or another unique identifier)
-        # We'll use the 'code' attribute for uniqueness
-        unique_programs_dict = {}
-        for p in self.programs:
-            # Use code as the unique key; you could use a hash or another identifier if needed
-            unique_programs_dict[p.code] = p
-        unique_programs = list(unique_programs_dict.values())
+    @property
+    def num_programs(self) -> int:
+        return self._num_programs
 
-        if not unique_programs:
-            return []
+    @property
+    def num_clusters(self) -> int:
+        return len(self._clusters)
 
-        # Convert NMSE scores to logits (lower NMSE = higher logit)
-        nmse_scores = np.array([p.nmse_score for p in unique_programs])
+    def register_program(
+            self,
+            program: code_manipulation.Function,
+            scores_per_test: ScoresPerTest,
+    ) -> None:
+        """Stores a program on this island, in its appropriate cluster."""
+        signature = _get_signature(scores_per_test)
+        if signature not in self._clusters:
+            score = _reduce_score(scores_per_test)
+            self._clusters[signature] = Cluster(score, program)
+        else:
+            self._clusters[signature].register_program(program)
+        self._num_programs += 1
 
-        # Handle infinite scores
-        finite_mask = np.isfinite(nmse_scores)
-        if not np.any(finite_mask):
-            return []
+    def get_prompt(self) -> tuple[str, int]:
+        """Constructs a prompt containing equation program skeletons from this island."""
+        signatures = list(self._clusters.keys())
+        cluster_scores = np.array(
+            [self._clusters[signature].score for signature in signatures])
 
-        # Use only finite scores for sampling
-        finite_programs = [p for p, finite in zip(unique_programs, finite_mask) if finite]
-        finite_scores = nmse_scores[finite_mask]
+        period = self._cluster_sampling_temperature_period
+        temperature = self._cluster_sampling_temperature_init * (
+                1 - (self._num_programs % period) / period)
+        probabilities = _softmax(cluster_scores, temperature)
 
-        # Convert to logits (negative NMSE so better scores have higher probability)
-        logits = -finite_scores / temperature
+        functions_per_prompt = min(len(self._clusters), self._functions_per_prompt)
 
-        # Apply softmax to get probabilities
-        exp_logits = np.exp(logits - np.max(logits))  # Subtract max for numerical stability
-        probabilities = exp_logits / np.sum(exp_logits)
+        idx = np.random.choice(
+            len(signatures), size=functions_per_prompt, p=probabilities)
+        chosen_signatures = [signatures[i] for i in idx]
+        implementations = []
+        scores = []
+        for signature in chosen_signatures:
+            cluster = self._clusters[signature]
+            implementations.append(cluster.sample_program())
+            scores.append(cluster.score)
 
-        # Sample unique programs
-        num_to_sample = min(num_samples, len(finite_programs))
-        if num_to_sample == 0:
-            return []
+        indices = np.argsort(scores)
+        sorted_implementations = [implementations[i] for i in indices]
+        version_generated = len(sorted_implementations) + 1
+        return self._generate_prompt(sorted_implementations), version_generated
 
-        sampled_indices = np.random.choice(
-            len(finite_programs),
-            size=num_to_sample,
-            replace=False,
-            p=probabilities
+    def _generate_prompt(
+            self,
+            implementations: Sequence[code_manipulation.Function]) -> str:
+        """Create a prompt containing a sequence of function `implementations`."""
+        implementations = copy.deepcopy(implementations)
+
+        # Format the names and docstrings of functions to be included in the prompt.
+        versioned_functions: list[code_manipulation.Function] = []
+        for i, implementation in enumerate(implementations):
+            new_function_name = f'{self._function_to_evolve}_v{i}'
+            implementation.name = new_function_name
+            # Update the docstring for all subsequent functions after `_v0`.
+            if i >= 1:
+                implementation.docstring = (
+                    f'Improved version of `{self._function_to_evolve}_v{i - 1}`.')
+            # If the function is recursive, replace calls to itself with its new name.
+            implementation = code_manipulation.rename_function_calls(
+                str(implementation), self._function_to_evolve, new_function_name)
+            versioned_functions.append(
+                code_manipulation.text_to_function(implementation))
+
+        # Create header of new function to be completed
+        next_version = len(implementations)
+        new_function_name = f'{self._function_to_evolve}_v{next_version}'
+        header = dataclasses.replace(
+            implementations[-1],
+            name=new_function_name,
+            body='',
+            docstring=('Improved version of '
+                       f'`{self._function_to_evolve}_v{next_version - 1}`.'),
         )
+        versioned_functions.append(header)
 
-        return [finite_programs[i] for i in sampled_indices]
-    
-    def get_best_programs(self, num_programs: int) -> List[EquationProgram]:
-        """Get the best programs from this island."""
-        sorted_programs = sorted(self.programs, key=lambda p: p.nmse_score)
-        return sorted_programs[:num_programs]
+        # Replace functions in the template with the list constructed here.
+        prompt = dataclasses.replace(self._template, functions=versioned_functions)
+        return str(prompt)
 
 
-class EvolutionaryBuffer:
-    """Multi-island evolutionary buffer for equation programs."""
-    
-    def __init__(self, 
-                 num_islands: int = 4,
-                 max_programs_per_island: int = 50,
-                 reset_period: int = 100,
-                 reset_fraction: float = 0.5):
-        """
-        Initialize the evolutionary buffer.
-        
-        Args:
-            num_islands: Number of islands to maintain
-            max_programs_per_island: Maximum programs per island
-            reset_period: How often to reset weaker islands
-            reset_fraction: Fraction of islands to reset
-        """
-        self.num_islands = num_islands
-        self.max_programs_per_island = max_programs_per_island
-        self.reset_period = reset_period
-        self.reset_fraction = reset_fraction
-        
-        # Initialize islands
-        self.islands = [Island(i, max_programs_per_island) for i in range(num_islands)]
-        
-        # Global tracking
-        self.global_best_nmse = float('inf')
-        self.global_best_program: Optional[EquationProgram] = None
-        self.total_programs_added = 0
-        self.programs_improved = 0
-        
-        # Reset tracking
-        self.last_reset_iteration = 0
-    
-    def add_program(self, 
-                   code: str, 
-                   nmse_score: float, 
-                   iteration: int,
-                   island_id: Optional[int] = None,
-                   metadata: Optional[Dict[str, Any]] = None) -> bool:
-        """
-        Add a program to the buffer.
-        
-        Args:
-            code: The equation code
-            nmse_score: NMSE score (lower is better)
-            iteration: Current iteration number
-            island_id: Specific island to add to (None for random)
-            metadata: Additional metadata
-            
-        Returns:
-            True if this program improved the global best score
-        """
-        if not np.isfinite(nmse_score):
-            return False
-        
-        # Choose island
-        if island_id is None:
-            island_id = random.randint(0, self.num_islands - 1)
-        
-        # Create program object
-        program = EquationProgram(
-            code=code,
-            nmse_score=nmse_score,
-            iteration=iteration,
-            island_id=island_id,
-            metadata=metadata or {}
-        )
-        
-        # Add to island
-        improved = self.islands[island_id].add_program(program)
-        
-        # Update global tracking
-        self.total_programs_added += 1
-        
-        # Check if this improves global best
-        if nmse_score < self.global_best_nmse:
-            self.global_best_nmse = nmse_score
-            self.global_best_program = program
-            self.programs_improved += 1
-            improved = True
-        
-        # Check if we should reset islands
-        if iteration - self.last_reset_iteration >= self.reset_period:
-            self._reset_weaker_islands()
-            self.last_reset_iteration = iteration
-        
-        return improved
-    
-    def sample_examples(self, 
-                       num_examples: int = 3, 
-                       temperature: float = 1.0,
-                       strategy: str = "boltzmann") -> List[EquationProgram]:
-        """
-        Sample example programs for inclusion in prompts.
-        
-        Args:
-            num_examples: Number of examples to sample
-            temperature: Temperature for Boltzmann sampling
-            strategy: Sampling strategy ("boltzmann", "best", "random")
-            
-        Returns:
-            List of sampled programs
-        """
-        if strategy == "best":
-            return self._sample_best_examples(num_examples)
-        elif strategy == "random":
-            return self._sample_random_examples(num_examples)
-        else:  # boltzmann
-            return self._sample_boltzmann_examples(num_examples, temperature)
-    
-    def _sample_boltzmann_examples(self, num_examples: int, temperature: float) -> List[EquationProgram]:
-        """Sample using Boltzmann distribution across all islands."""
-        all_programs = []
-        for island in self.islands:
-            all_programs.extend(island.programs)
-        
-        if not all_programs:
-            return []
-        
-        # Convert to numpy arrays for efficient computation
-        nmse_scores = np.array([p.nmse_score for p in all_programs])
-        
-        # Handle infinite scores
-        finite_mask = np.isfinite(nmse_scores)
-        if not np.any(finite_mask):
-            return []
-        
-        finite_programs = [p for p, finite in zip(all_programs, finite_mask) if finite]
-        finite_scores = nmse_scores[finite_mask]
-        
-        # Convert to logits (negative NMSE so better scores have higher probability)
-        logits = -finite_scores / temperature
-        
-        # Apply softmax
-        exp_logits = np.exp(logits - np.max(logits))
-        probabilities = exp_logits / np.sum(exp_logits)
-        
-        # Sample programs
-        num_to_sample = min(num_examples, len(finite_programs))
-        if num_to_sample == 0:
-            return []
-        
-        sampled_indices = np.random.choice(
-            len(finite_programs),
-            size=num_to_sample,
-            replace=False,
-            p=probabilities
-        )
-        
-        return [finite_programs[i] for i in sampled_indices]
-    
-    def _sample_best_examples(self, num_examples: int) -> List[EquationProgram]:
-        """Sample the best programs across all islands."""
-        all_programs = []
-        for island in self.islands:
-            all_programs.extend(island.programs)
-        
-        # Sort by NMSE score and return best
-        sorted_programs = sorted(all_programs, key=lambda p: p.nmse_score)
-        return sorted_programs[:num_examples]
-    
-    def _sample_random_examples(self, num_examples: int) -> List[EquationProgram]:
-        """Sample random programs across all islands."""
-        all_programs = []
-        for island in self.islands:
-            all_programs.extend(island.programs)
-        
-        if not all_programs:
-            return []
-        
-        num_to_sample = min(num_examples, len(all_programs))
-        return random.sample(all_programs, num_to_sample)
-    
-    def _reset_weaker_islands(self):
-        """Reset the weaker half of islands."""
-        # Sort islands by their best NMSE score
-        island_scores = [(i, island.best_nmse) for i, island in enumerate(self.islands)]
-        island_scores.sort(key=lambda x: x[1])  # Sort by NMSE (lower is better)
-        
-        # Determine how many islands to reset
-        num_to_reset = max(1, int(self.num_islands * self.reset_fraction))
-        
-        # Get the best islands to keep
-        keep_islands = island_scores[:self.num_islands - num_to_reset]
-        reset_islands = island_scores[self.num_islands - num_to_reset:]
-        
-        # Reset weaker islands
-        for island_idx, _ in reset_islands:
-            # Choose a founder from the best islands
-            founder_island_idx = random.choice(keep_islands)[0]
-            founder_island = self.islands[founder_island_idx]
-            
-            # Create new island with founder's best program
-            new_island = Island(island_idx, self.max_programs_per_island)
-            if founder_island.best_program:
-                new_island.add_program(founder_island.best_program)
-            
-            self.islands[island_idx] = new_island
-    
-    def get_statistics(self) -> Dict[str, Any]:
-        """Get statistics about the buffer."""
-        total_programs = sum(len(island.programs) for island in self.islands)
-        non_empty_islands = sum(1 for island in self.islands if island.programs)
-        
-        return {
-            "total_programs": total_programs,
-            "non_empty_islands": non_empty_islands,
-            "global_best_nmse": self.global_best_nmse,
-            "total_programs_added": self.total_programs_added,
-            "programs_improved": self.programs_improved,
-            "improvement_rate": self.programs_improved / max(1, self.total_programs_added),
-            "island_stats": [
-                {
-                    "island_id": island.island_id,
-                    "num_programs": len(island.programs),
-                    "best_nmse": island.best_nmse
-                }
-                for island in self.islands
-            ]
-        }
-    
-    def clear(self):
-        """Clear all programs from the buffer."""
-        for island in self.islands:
-            island.programs.clear()
-            island.best_nmse = float('inf')
-            island.best_program = None
-        
-        self.global_best_nmse = float('inf')
-        self.global_best_program = None
-        self.total_programs_added = 0
-        self.programs_improved = 0
+class Cluster:
+    """A cluster of programs on the same island and with the same Signature."""
+
+    def __init__(self, score: float, implementation: code_manipulation.Function):
+        self._score = score
+        self._programs: list[code_manipulation.Function] = [implementation]
+        self._lengths: list[int] = [len(str(implementation))]
+
+    @property
+    def score(self) -> float:
+        return self._score
+
+    def register_program(self, program: code_manipulation.Function) -> None:
+        """Adds `program` to the cluster."""
+        self._programs.append(program)
+        self._lengths.append(len(str(program)))
+
+    def sample_program(self) -> code_manipulation.Function:
+        """Samples a program, giving higher probability to shorter programs."""
+        normalized_lengths = (np.array(self._lengths) - min(self._lengths)) / (
+                max(self._lengths) + 1e-6)
+        probabilities = _softmax(-normalized_lengths, temperature=1.0)
+        return np.random.choice(self._programs, p=probabilities)
