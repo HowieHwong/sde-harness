@@ -2,15 +2,11 @@
 
 from .generation import LLMSRGeneration
 from .oracle import EquationOracle
-from .buffer import EvolutionaryBuffer, EquationProgram
-from .prompt import PromptTemplates, EvolutionaryPromptTemplates
+from .buffer import ExperienceBuffer, ExperienceBufferConfig
 
 __all__ = [
     'LLMSRGeneration',
     'EquationOracle',
-    'EvolutionaryBuffer',
-    'EquationProgram',
-    'PromptTemplates',
-    'EvolutionaryPromptTemplates'
+    'ExperienceBuffer',
+    'ExperienceBufferConfig',
 ]
-

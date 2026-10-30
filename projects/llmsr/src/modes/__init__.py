@@ -1,7 +1,5 @@
 """Mode implementations for LLMSR project."""
 
-from .iter import LLMSRWorkflow
-from .evol import LLMSREvolutionaryWorkflow
+from .evol import LLMSREvolutionaryWorkflow, LLMSRWorkflow
 
 __all__ = ['LLMSRWorkflow', 'LLMSREvolutionaryWorkflow']
-

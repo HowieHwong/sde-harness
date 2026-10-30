@@ -1,222 +1,109 @@
-"""Synchronous command-line interface for LLMSR equation discovery (symbolic regression)."""
+"""Command-line interface for LLM-SR equation discovery (symbolic regression)."""
 
 import argparse
-from typing import Dict, Any, List, Optional
-from pathlib import Path
-
-# Patch: If sde_harness is not installed, add project root to sys.path
-import sys
 import os
-import weave
+import random
+import sys
+from typing import Any, Dict
 
-# Ensure sde_harness is importable by adding project root to sys.path if needed
+import numpy as np
+
+# Ensure sde_harness is importable by adding the repository root to sys.path.
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 from sde_harness.base import CLIBase
-from src.modes.iter import LLMSRWorkflow
 from src.modes.evol import LLMSREvolutionaryWorkflow
 
 
 class LLMSRCLI(CLIBase):
-    """Synchronous CLI for LLMSR equation discovery."""
-    
+    """CLI for LLM-SR equation discovery. Defaults reproduce the paper runs."""
+
     def __init__(self):
         super().__init__("llm-sym-reg")
-    
+
     def _add_project_arguments(self, parser: argparse.ArgumentParser):
-        """Add LLMSR-specific arguments."""
+        """Add LLM-SR specific arguments."""
         parser.add_argument(
             "--dataset",
             default="lsrtransform",
             choices=["lsrtransform", "bio_pop_growth", "chem_react", "matsci", "phys_osc"],
-            help="Dataset to use for symbolic regression"
+            help="LLM-SRBench dataset to use",
         )
-        parser.add_argument(
-            "--problem",
-            type=str,
-            help="Specific problem name to solve (optional)"
-        )
+        parser.add_argument("--problem", type=str, help="Single problem name to solve (e.g. PO0)")
+        parser.add_argument("--problem-filter", nargs="+", help="List of problem names to process")
         parser.add_argument(
             "--model",
-            default="openai/gpt-4.1-nano-2025-04-14",
-            help="LLM model to use for generation"
+            default="openai/gpt-4o-2024-08-06",
+            help="Model key in models.yaml (e.g. openai/gpt-5, openai/gpt-5-chat, "
+                 "anthropic/claude-sonnet-4.5, deepseek/deepseek-R1)",
         )
-        parser.add_argument(
-            "--max-iterations",
-            type=int,
-            default=1000,
-            help="Maximum number of optimization iterations"
-        )
-        parser.add_argument(
-            "--max-params",
-            type=int,
-            default=10,
-            help="Maximum number of parameters to optimize in the equation"
-        )
-        parser.add_argument(
-            "--optimization-method",
-            default="L-BFGS-B",
-            choices=["BFGS", "L-BFGS-B", "SLSQP", "trust-constr"],
-            help="Optimization method for equation parameter fitting"
-        )
-        parser.add_argument(
-            "--problem-filter",
-            nargs="+",
-            help="List of specific problem names to process (optional)"
-        )
-        # parser.add_argument(
-        #     "--output-dir",
-        #     default="results",
-        #     help="Output Directory"
-        # )
-        parser.add_argument("--project-name", 
-            default="llm-sym-reg",
-            help="Weave project name for logging")
+        parser.add_argument("--max-samples", type=int, default=1000,
+                            help="Total LLM samples per problem (default: 1000)")
+        parser.add_argument("--samples-per-prompt", type=int, default=8,
+                            help="LLM samples drawn per prompt (default: 8)")
+        parser.add_argument("--num-islands", type=int, default=10,
+                            help="Number of islands in the experience buffer (default: 10)")
+        parser.add_argument("--functions-per-prompt", type=int, default=2,
+                            help="Previous equation versions included in each prompt (default: 2)")
+        parser.add_argument("--reset-period", type=int, default=4 * 60 * 60,
+                            help="Seconds between resets of the weaker islands (default: 14400)")
+        parser.add_argument("--cluster-temperature-init", type=float, default=0.1,
+                            help="Initial cluster sampling temperature (default: 0.1)")
+        parser.add_argument("--cluster-temperature-period", type=int, default=30_000,
+                            help="Cluster sampling temperature period (default: 30000)")
+        parser.add_argument("--evaluate-timeout", type=int, default=30,
+                            help="Timeout (s) for evaluating one sampled equation (default: 30)")
+        parser.add_argument("--hf-descriptions", action="store_true",
+                            help="Use HuggingFace variable descriptions instead of the paper's")
+        parser.add_argument("--seed", type=int, default=None, help="Random seed for the search")
+        parser.add_argument("--weave", action="store_true", help="Enable Weave logging")
+        parser.add_argument("--project-name", default="llm-sym-reg",
+                            help="Weave project name for logging")
 
-
-        # Evolutionary parameters
-        parser.add_argument(
-            "--mode",
-            type=str,
-            choices=["evolutionary", "iterative"],
-            default="evolutionary",
-            help="Mode to run the workflow in (default: sync)"
-        )
-        parser.add_argument(
-            "--num-islands", 
-            type=int, 
-            default=10,
-            help="Number of islands in evolutionary buffer (default: 4)"
-        )
-        parser.add_argument(
-            "--max-programs-per-island", 
-            type=int, 
-            default=50,
-            help="Maximum programs per island (default: 50)"
-        )
-        parser.add_argument(
-            "--reset-period", 
-            type=int, 
-            default=100,
-            help="How often to reset weaker islands (default: 100)"
-        )
-        parser.add_argument(
-            "--reset-fraction", 
-            type=float, 
-            default=0.5,
-            help="Fraction of islands to reset (default: 0.5)"
-        )
-        parser.add_argument(
-            "--num-examples", 
-            type=int, 
-            default=2,
-            help="Number of examples to include in prompts (default: 3)"
-        )
-        parser.add_argument(
-            "--example-temperature", 
-            type=float, 
-            default=1.0,
-            help="Temperature for Boltzmann sampling (default: 1.0)"
-        )
-        parser.add_argument(
-            "--example-temperature-period", 
-            type=int, 
-            default=100,
-            help="Period for temperature annealing (default: 100)"
-        )
-        parser.add_argument(
-            "--sampling-strategy", 
-            type=str, 
-            choices=["boltzmann", "best", "random"],
-            default="boltzmann",
-            help="Sampling strategy for examples (default: boltzmann)"
-        )
-    
     def run_command(self, args: argparse.Namespace) -> Dict[str, Any]:
-        """Execute the LLMSR command synchronously."""
-        print("Starting LLMSR Equation Discovery")
-        print(f"Dataset: {args.dataset}")
-        print(f"Model: {args.model}")
-        print(f"Max iterations: {args.max_iterations}")
+        """Run LLM-SR."""
+        print("Starting LLM-SR equation discovery")
+        print(f"Dataset: {args.dataset} | Model: {args.model} | Samples: {args.max_samples} "
+              f"({args.samples_per_prompt}/prompt) | Islands: {args.num_islands}")
         print(f"Output directory: {args.output_dir}")
-        print(f"Project name: {args.project_name}")
-    
-        # Initialize weave logging
-        weave.init(args.project_name)
-        
-        # Initialize workflow
-        if args.mode == "evolutionary":
-            workflow = LLMSREvolutionaryWorkflow(
-                model_name=args.model,
-                max_iterations=args.max_iterations,
-                max_params=args.max_params,
-                optimization_method=args.optimization_method,
-                num_islands=args.num_islands,
-                max_programs_per_island=args.max_programs_per_island,
-                reset_period=args.reset_period,
-                reset_fraction=args.reset_fraction,
-                num_examples=args.num_examples,
-                temperature=args.example_temperature,
-                sampling_strategy=args.sampling_strategy
-            )
-        else:
-            workflow = LLMSRWorkflow(
+
+        if args.seed is not None:
+            random.seed(args.seed)
+            np.random.seed(args.seed)
+        if args.weave:
+            import weave
+            weave.init(args.project_name)
+
+        workflow = LLMSREvolutionaryWorkflow(
             model_name=args.model,
-            max_iterations=args.max_iterations,
-            max_params=args.max_params,
-            optimization_method=args.optimization_method
+            models_file=args.models_file,
+            credentials_file=args.credentials_file,
+            max_samples=args.max_samples,
+            samples_per_prompt=args.samples_per_prompt,
+            num_islands=args.num_islands,
+            functions_per_prompt=args.functions_per_prompt,
+            reset_period=args.reset_period,
+            cluster_sampling_temperature_init=args.cluster_temperature_init,
+            cluster_sampling_temperature_period=args.cluster_temperature_period,
+            evaluate_timeout_seconds=args.evaluate_timeout,
+            use_paper_descriptions=not args.hf_descriptions,
         )
-        
-        # Setup dataset
-        print(f"\n Loading dataset: {args.dataset}")
         workflow.setup_dataset(args.dataset)
-        
-        # Run discovery
+
         if args.problem:
-            # Single problem
-            print(f"\n Discovering equation for problem: {args.problem}")
-            if args.mode == "evolutionary":
-                result = workflow.discover_equation_evolutionary(args.problem, args.output_dir) 
-            else:
-                print(f"\n Discovering equation for problem: {args.problem}")
-                result = workflow.discover_equation_sync(args.problem, args.output_dir)
-            # Print best result
-            best_equation = workflow.get_best_equation(args.problem)
-            if best_equation:
-                print(f"Best NMSE: {best_equation['nmse_score']:.6f}")
-                print(f"Best Equation: {best_equation['equation_code']:.6f}")
-                print(f"Found in iteration: {best_equation['iteration']}")
-            
-            results = {args.problem: result}
-        
+            results = {args.problem: workflow.discover_equation(args.problem, args.output_dir)}
         else:
-            # All problems or filtered problems
-            print(f"\n Discovering equations for all problems")
-            if args.mode == "evolutionary":
-                results = workflow.discover_all_equations_evolutionary(
-                    output_dir=args.output_dir,
-                    problem_filter=args.problem_filter
-                )
-            else:
-                results = workflow.discover_all_equations_sync(
-                output_dir=args.output_dir,
-                problem_filter=args.problem_filter
-            )
-        
-        # Print summary
+            results = workflow.discover_all_equations(
+                output_dir=args.output_dir, problem_filter=args.problem_filter)
+
         workflow.print_summary()
-        
-        return {
-            "results": results,
-            "workflow": workflow,
-            "output_dir": args.output_dir
-        }
+        return {"results": results, "output_dir": args.output_dir}
 
 
 def main():
-    """Main entry point for the synchronous CLI."""
+    """Main entry point."""
     cli = LLMSRCLI()
     cli.main()
 
